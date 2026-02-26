@@ -41,6 +41,11 @@ app.get("/api/health", (_req, res) =>
   res.json({ message: "Server is running", status: "OK" })
 );
 
+// ── Routes ───────────────────────────────────────────────────────
+// Auth: register, login, forgot-password, verify-otp, reset-password, profile
+app.use("/api/auth",             require("./routes/auth"));
+
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
