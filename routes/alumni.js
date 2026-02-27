@@ -15,5 +15,4 @@ router.get("/map/data", getMapData);
 router.get("/:id", getAlumniById);
 router.put("/:id", authMiddleware, updateAlumniProfile);
 
-
 module.exports = router;
