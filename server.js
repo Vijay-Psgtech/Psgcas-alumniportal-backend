@@ -57,6 +57,9 @@ app.use("/api/admin", require("./routes/admin"));
 // Admin dashboard (full alumni mgmt + donations + stats)
 app.use("/api/admin/dashboard",  require("./routes/adminDash"));
 
+// ── NEW: EVENTS API (Create, Read, Update, Delete) ───────────────
+app.use("/api/events",  require("./routes/events"));
+
 
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
