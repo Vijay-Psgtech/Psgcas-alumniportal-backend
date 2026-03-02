@@ -54,6 +54,10 @@ app.use("/api/alumni", require("./routes/alumni"));
 // Admin simple routes (approve/reject/stats) — uses Alumni model + isAdmin flag
 app.use("/api/admin", require("./routes/admin"));
 
+// Admin dashboard (full alumni mgmt + donations + stats)
+app.use("/api/admin/dashboard",  require("./routes/adminDash"));
+
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
