@@ -51,6 +51,9 @@ app.use("/api/auth", require("./routes/auth"));
 // Alumni directory (public + protected profile update)
 app.use("/api/alumni", require("./routes/alumni"));
 
+// Admin simple routes (approve/reject/stats) — uses Alumni model + isAdmin flag
+app.use("/api/admin", require("./routes/admin"));
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
