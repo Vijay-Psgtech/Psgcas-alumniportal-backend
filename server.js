@@ -60,6 +60,9 @@ app.use("/api/admin/dashboard",  require("./routes/adminDash"));
 // ── NEW: EVENTS API (Create, Read, Update, Delete) ───────────────
 app.use("/api/events",  require("./routes/events"));
 
+// ── NEW: ALBUMS API (Create, Read, Update, Delete) ───────────────
+app.use("/api/albums", require("./routes/albums"));
+
 
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
