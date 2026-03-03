@@ -79,3 +79,50 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// ======================== DONATION MANAGEMENT ========================
+// GET /api/admin/dashboard/donations
+exports.getAllDonations = async (req, res) => {
+  try {
+    const { status, currency, paymentMethod, startDate, endDate, sortBy } =
+      req.query;
+    let filter = {};
+    if (status) filter.status = status;
+    if (currency) filter.currency = currency;
+    if (paymentMethod) filter.paymentMethod = paymentMethod;
+
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+
+    let sortOptions = { createdAt: -1 };
+    if (sortBy === "amount") sortOptions = { amount: -1 };
+    else if (sortBy === "donor") sortOptions = { donorName: 1 };
+
+    const donations = await Donation.find(filter)
+      .populate("alumniId", "firstName lastName email")
+      .sort(sortOptions);
+
+    const completed = donations.filter((d) => d.status === "completed");
+    const summary = {
+      totalDonations: donations.length,
+      completedDonations: completed.length,
+      totalAmount: completed.reduce((sum, d) => sum + d.amount, 0),
+      pendingAmount: donations
+        .filter((d) => d.status === "pending")
+        .reduce((sum, d) => sum + d.amount, 0),
+    };
+
+    res.json({
+      message: "Donations retrieved successfully",
+      count: donations.length,
+      summary,
+      donations,
+    });
+  } catch (error) {
+    console.error("Get Donations Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
