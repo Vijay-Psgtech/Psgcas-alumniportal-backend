@@ -48,11 +48,9 @@ exports.createDonations = async (req, res) => {
     }
 
     if (!isAnonymous && (!donorName || !donorEmail)) {
-      return res
-        .status(400)
-        .json({
-          message: "Name and email required for non-anonymous donations",
-        });
+      return res.status(400).json({
+        message: "Name and email required for non-anonymous donations",
+      });
     }
 
     // ✅ Get alumni ID from JWT token if available
@@ -149,3 +147,93 @@ exports.createDonations = async (req, res) => {
     });
   }
 };
+
+// ─────────────────────────────────────────────────────────────
+// 2️⃣ RAZORPAY PAYMENT GATEWAY
+// ─────────────────────────────────────────────────────────────
+async function initializeRazorpayPayment(donation, amountInINR) {
+  try {
+    if (!razorpay) {
+      throw new Error("Razorpay is not configured");
+    }
+    const amountInPaise = Math.round(amountInINR * 100); // convert to paise
+
+    const order = await razorpay.orders.create({
+      amount: amountInPaise,
+      currency: "INR",
+      receipt: donation._id.toString(),
+      notes: {
+        donorName: donation.donorName,
+        donorEmail: donation.donorEmail,
+        message: donation.message,
+      },
+    });
+
+    return {
+      gateway: "razorpay",
+      orderId: order.id,
+      amount: amountInINR,
+      currency: "INR",
+      keyId: process.env.RAZORPAY_KEY_ID,
+      name: "PSG Tech Alumni Foundation",
+      description: "Support PSG Tech - Donation",
+      prefill: {
+        name: donation.donorName,
+        email: donation.donorEmail,
+      },
+    };
+  } catch (error) {
+    console.error("❌ Razorpay error:", error);
+    throw new Error("Failed to initialize Razorpay payment");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3️⃣ STRIPE PAYMENT GATEWAY
+// ─────────────────────────────────────────────────────────────
+async function initializeStripePayment(donation, amountInUSD) {
+  try {
+    if (!stripe) {
+      throw new Error("Stripe is not configured");
+    }
+
+    const amountInCents = Math.round(amountInUSD * 100); // Convert to cents
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "PSG Tech Alumni Foundation Donation",
+              description: `Support PSG Tech - ${donation.message || "General donation"}`,
+            },
+            unit_amount: amountInCents,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/donate/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/donate?cancelled=true`,
+      customer_email: donation.donorEmail,
+      metadata: {
+        donationId: donation._id.toString(),
+        donorName: donation.donorName,
+      },
+    });
+
+    return {
+      gateway: "stripe",
+      sessionId: session.id,
+      amount: amountInUSD,
+      currency: "USD",
+      clientSecret: session.client_secret,
+      url: session.url,
+    };
+  } catch (error) {
+    console.error("❌ Stripe error:", error);
+    throw new Error("Failed to initialize Stripe payment");
+  }
+}
