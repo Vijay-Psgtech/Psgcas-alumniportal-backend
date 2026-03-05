@@ -237,3 +237,56 @@ async function initializeStripePayment(donation, amountInUSD) {
     throw new Error("Failed to initialize Stripe payment");
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// 4️⃣ VERIFY RAZORPAY PAYMENT
+// ─────────────────────────────────────────────────────────────
+// POST /api/donations/verify-razorpay
+exports.verifyRazorPay = async (req, res) => {
+  try {
+    if (!razorpay) {
+      return res.status(500).json({ message: "Razorpay is not configured" });
+    }
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body;
+
+    // ✅ Verify signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const crypto = require("crypto");
+    const generated_signature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest("hex");
+
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({ message: "Invalid payment signature" });
+    }
+
+    // ✅ Update donation status
+    const donation = await Donation.findById(req.body.donationId);
+    if (!donation) {
+      return res.status(404).json({ message: "Donation not found" });
+    }
+
+    donation.status = "completed";
+    donation.transactionId = razorpay_payment_id;
+    donation.paymentGateway = "razorpay";
+    donation.completedAt = new Date();
+    await donation.save();
+
+    // ✅ Send confirmation email
+    await sendDonationConfirmationEmail(donation);
+
+    res.json({
+      success: true,
+      message: "Payment verified successfully",
+      donation,
+    });
+    
+  } catch (error) {
+    console.error("❌ Razorpay verification error:", error);
+    res
+      .status(500)
+      .json({ message: "Verification failed", error: error.message });
+  }
+};
