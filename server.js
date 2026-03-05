@@ -63,6 +63,9 @@ app.use("/api/events",  require("./routes/events"));
 // ── NEW: ALBUMS API (Create, Read, Update, Delete) ───────────────
 app.use("/api/albums", require("./routes/albums"));
 
+// Donations (public create + protected mine + admin all)
+app.use("/api/donations", require("./routes/donations"));
+
 
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
