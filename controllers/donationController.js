@@ -282,11 +282,34 @@ exports.verifyRazorPay = async (req, res) => {
       message: "Payment verified successfully",
       donation,
     });
-    
   } catch (error) {
     console.error("❌ Razorpay verification error:", error);
     res
       .status(500)
       .json({ message: "Verification failed", error: error.message });
+  }
+};
+
+//─────────────────────────────────────────────────────────────
+// Get All donations
+// ─────────────────────────────────────────────────────────────
+exports.getAllDonations = async (req, res) => {
+  try {
+    const donations = await Donation.find().sort({ createdAt: -1 });
+
+    const stats = {
+      total: donations.length,
+      completed: donations.filter((d) => d.status === "completed").length,
+      pending: donations.filter((d) => d.status === "pending").length,
+      totalAmount: donations
+        .filter((d) => d.status === "completed")
+        .reduce((sum, d) => sum + d.amount, 0),
+    };
+
+    res.json({ donations, stats });
+
+  } catch (error) {
+    console.error("❌ Admin get donations error:", error);
+    res.status(500).json({ message: "Failed to fetch donations" });
   }
 };

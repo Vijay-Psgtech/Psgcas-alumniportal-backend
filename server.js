@@ -64,7 +64,7 @@ app.use("/api/events",  require("./routes/events"));
 app.use("/api/albums", require("./routes/albums"));
 
 // Donations (public create + protected mine + admin all)
-app.use("/api/donations", require("./routes/donations"));
+app.use("/api/donations", require("./routes/donation"));
 
 
 // ── Error handler ────────────────────────────────────────────────
