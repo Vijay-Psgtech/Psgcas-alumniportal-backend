@@ -21,7 +21,7 @@ const generateToken = (alumni) =>
   jwt.sign(
     { id: alumni._id, email: alumni.email, isAdmin: alumni.isAdmin },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" },
+    { expiresIn: "1d" },
   );
 
 // @route   POST /api/auth/register
