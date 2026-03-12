@@ -47,6 +47,7 @@ const eventSchema = new mongoose.Schema(
       },
     ],
     highlights: [String],
+    imageUrl: { type: String },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },

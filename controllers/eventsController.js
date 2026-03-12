@@ -37,6 +37,7 @@ exports.createEvent = async (req, res) => {
       highlight,
     } = req.body;
 
+
     if (!title || !date || !venue) {
       return res
         .status(400)
@@ -59,6 +60,10 @@ exports.createEvent = async (req, res) => {
       schedule: [],
       highlights: [],
     });
+
+    if (req.file) {
+      newEvent.imageUrl = req.file.path.replace(/\\/g, "/");
+    }
 
     const savedEvent = await newEvent.save();
     res.status(201).json({ success: true, data: savedEvent });
