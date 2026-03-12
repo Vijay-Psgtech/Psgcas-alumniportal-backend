@@ -109,6 +109,10 @@ exports.updateEvent = async (req, res) => {
       updatedAt: new Date(),
     };
 
+    if(req.file) {
+      updateData.imageUrl = req.file.path.replace(/\\/g, "/");
+    }
+
     const updatedEvent = await Event.findByIdAndUpdate(
       req.params.id,
       updateData,
