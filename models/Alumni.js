@@ -89,6 +89,8 @@ const AlumniSchema = new mongoose.Schema(
       default: false,
     },
 
+    profileImage: { type: String },
+
     // Timestamps
     createdAt: {
       type: Date,
