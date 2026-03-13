@@ -8,8 +8,8 @@ const storage = multer.diskStorage({
 
         if (req.baseUrl.includes("event")) {
             folder += "events/";
-        } else if (req.baseUrl.includes("profile")) {
-            folder += "profile/"
+        } else if (req.baseUrl.includes("alumni")) {
+            folder += "alumniProfile/"
         } else if (req.baseUrl.includes("albums")) {
             folder += "albums/"
         }

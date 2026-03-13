@@ -94,6 +94,10 @@ exports.updateAlumniProfile = async (req, res) => {
       }
     });
 
+    if (req.file) {
+      updateData.profileImage = req.file.path.replace(/\\/g, "/");
+    }
+
     // if user sent geo coordinates, map them into the location field
     if (req.body.coordinates) {
       updateData.location = {
