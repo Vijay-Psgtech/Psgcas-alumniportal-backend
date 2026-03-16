@@ -307,7 +307,6 @@ exports.getAllDonations = async (req, res) => {
     };
 
     res.json({ donations, stats });
-
   } catch (error) {
     console.error("❌ Admin get donations error:", error);
     res.status(500).json({ message: "Failed to fetch donations" });

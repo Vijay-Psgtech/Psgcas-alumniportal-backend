@@ -4,7 +4,11 @@ const Alumni = require("../models/Alumni");
 exports.getPendingAlumni = async (req, res) => {
   try {
     const alumni = await Alumni.find({ isApproved: false }).select("-password");
-    res.json({ message: "Pending alumni retrieved successfully", count: alumni.length, alumni });
+    res.json({
+      message: "Pending alumni retrieved successfully",
+      count: alumni.length,
+      alumni,
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -16,7 +20,7 @@ exports.approveAlumni = async (req, res) => {
     const alumni = await Alumni.findByIdAndUpdate(
       req.params.id,
       { isApproved: true },
-      { new: true }           // ✅ FIX: was missing new:true
+      { new: true }, // ✅ FIX: was missing new:true
     ).select("-password");
 
     if (!alumni) return res.status(404).json({ message: "Alumni not found" });
@@ -26,7 +30,6 @@ exports.approveAlumni = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 // PUT /api/admin/reject/:id   ← ✅ FIX: route in admin.js was /reject/:id
 exports.rejectAlumni = async (req, res) => {
@@ -40,14 +43,13 @@ exports.rejectAlumni = async (req, res) => {
   }
 };
 
-
 // PUT /api/admin/make-admin/:id
 exports.makeAdmin = async (req, res) => {
   try {
     const alumni = await Alumni.findByIdAndUpdate(
       req.params.id,
       { isAdmin: true },
-      { new: true }
+      { new: true },
     ).select("-password");
 
     if (!alumni) return res.status(404).json({ message: "Alumni not found" });

@@ -37,7 +37,6 @@ exports.createEvent = async (req, res) => {
       highlight,
     } = req.body;
 
-
     if (!title || !date || !venue) {
       return res
         .status(400)
@@ -109,7 +108,7 @@ exports.updateEvent = async (req, res) => {
       updatedAt: new Date(),
     };
 
-    if(req.file) {
+    if (req.file) {
       updateData.imageUrl = req.file.path.replace(/\\/g, "/");
     }
 

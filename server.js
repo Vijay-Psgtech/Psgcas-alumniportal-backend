@@ -40,7 +40,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static("uploads"));
 
-
 // ── Health check ─────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>
   res.json({ message: "Server is running", status: "OK" }),
@@ -57,10 +56,10 @@ app.use("/api/alumni", require("./routes/alumni"));
 app.use("/api/admin", require("./routes/admin"));
 
 // Admin dashboard (full alumni mgmt + donations + stats)
-app.use("/api/admin/dashboard",  require("./routes/adminDash"));
+app.use("/api/admin/dashboard", require("./routes/adminDash"));
 
 // ── NEW: EVENTS API (Create, Read, Update, Delete) ───────────────
-app.use("/api/events",  require("./routes/events"));
+app.use("/api/events", require("./routes/events"));
 
 // ── NEW: ALBUMS API (Create, Read, Update, Delete) ───────────────
 app.use("/api/albums", require("./routes/albums"));
@@ -70,7 +69,6 @@ app.use("/api/donations", require("./routes/donation"));
 
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
-
 
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
