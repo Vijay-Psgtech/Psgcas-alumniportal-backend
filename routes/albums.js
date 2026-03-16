@@ -5,7 +5,7 @@ const {
   getAlbumByYear,
   createAlbum,
   updateAlbum,
-  deleteAlbum
+  deleteAlbum,
 } = require("../controllers/albumController");
 
 router.get("/", getAllAlbum);
