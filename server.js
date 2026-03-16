@@ -68,6 +68,9 @@ app.use("/api/albums", require("./routes/albums"));
 // Donations (public create + protected mine + admin all)
 app.use("/api/donations", require("./routes/donation"));
 
+// Reports routes for admin
+app.use("/api/reports", require("./routes/adminReports"));
+
 
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
