@@ -3,6 +3,7 @@ const Alumni = require("../models/Alumni");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const { transporter } = require("../config/mailer");
 
 // In-memory OTP store: { email: { otp, expiresAt } }
 // In production replace with Redis or a DB collection
@@ -229,19 +230,23 @@ exports.forgotPassword = async (req, res) => {
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
     otpStore.set(email.toLowerCase(), { otp, expiresAt });
 
-    // ─── TODO: Replace this console.log with actual email sending ───
-    // Example using nodemailer:
-    //   const transporter = nodemailer.createTransport({ ... });
-    //   await transporter.sendMail({
-    //     to: email,
-    //     subject: "PSG Alumni - Password Reset OTP",
-    //     html: `<p>Your OTP is <strong>${otp}</strong>. Valid for 10 minutes.</p>`
-    //   });
-    console.log(`\n📧 OTP for ${email}: ${otp} (expires in 10 minutes)\n`);
+    //console.log(`\n📧 OTP for ${email}: ${otp} (expires in 10 minutes)\n`);
+
+    await transporter.sendMail({
+      from: `"PSG Alumni"<${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Password Reset OTP",
+      html: `
+        <h2>Pasword Reset Request</h2>
+        <p>Your OTP is:</p>
+        <h1>${otp}</h1>
+        <p>This OTP is valid for 5 minutes.</p>
+      `
+    })
 
     res.json({ message: `OTP sent to ${email}. Check your inbox.` });
   } catch (error) {
