@@ -2,10 +2,13 @@ const Event = require("../models/Events");
 
 exports.getAllEvents = async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, category } = req.query;
     let query = {};
     if (status) {
       query.status = { $regex: new RegExp(`^${status}$`, "i") };
+    }
+    if (category) {
+      query.category = { $regex: new RegExp(`^${category}$`, "i") };
     }
     console.log("Query", query);
     const events = await Event.find(query).sort({ createdAt: -1 });
