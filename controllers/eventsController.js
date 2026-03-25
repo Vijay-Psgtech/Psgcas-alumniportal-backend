@@ -2,7 +2,7 @@ const Event = require("../models/Events");
 
 exports.getAllEvents = async (req, res) => {
   try {
-    const events = await Event.find().sort({ data: -1 });
+    const events = await Event.find().sort({ createdAt: -1 });
     res.json({ success: true, data: events });
   } catch (error) {
     console.error("Error fetching events:", error);
