@@ -2,13 +2,28 @@ const Event = require("../models/Events");
 
 exports.getAllEvents = async (req, res) => {
   try {
-    const events = await Event.find().sort({ createdAt: -1 });
-    res.json({ success: true, data: events });
+    const { status } = req.query;
+    let query = {};
+    if (status) {
+      query.status = { $regex: new RegExp(`^${status}$`, "i") };
+    }
+    console.log("Query", query);
+    const events = await Event.find(query).sort({ createdAt: -1 });
+
+   res.json({
+      success: true,
+      data: events,
+    });
+
   } catch (error) {
     console.error("Error fetching events:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch events" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch events",
+    });
   }
 };
+
 
 exports.getEventsById = async (req, res) => {
   try {
@@ -19,7 +34,9 @@ exports.getEventsById = async (req, res) => {
         .json({ success: false, message: "Event not found" });
     res.json({ success: true, data: event });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to fetch event" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch events by Id" });
   }
 };
 
