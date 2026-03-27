@@ -4,17 +4,34 @@ const fs = require("fs");
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "uploads/alumni");
+    let folder = `uploads/alumni/${req.alumniId}/`;
+
+    // Create folder
+    fs.mkdirSync(folder, { recursive: true });
+
+    cb(null, folder);
+
   },
 
   filename: function (req, file, cb) {
-    const uniqueName =
-      Date.now() + "-" + Math.round(Math.random() * 1e9);
+    let fileName = "";
 
-    cb(
-      null,
-      uniqueName + path.extname(file.originalname)
-    );
+    if (file.fieldname === "businessCard") {
+      fileName = "business-card";
+    } else if (file.fieldname === "idCard") {
+      fileName = "id-card";
+    } else if (file.fieldname === "entrepreneurPoster") {
+      fileName = "entrepreneur-poster";
+    } else if (file.fieldname === "studentPhoto") {
+      fileName = "student-photo";
+    } else if (file.fieldname === "currentPhoto") {
+      fileName = "current-photo";
+    }
+
+    const ext = path.extname(file.originalname);
+
+    cb(null, `${fileName}${ext}`);
+
   },
 });
 
