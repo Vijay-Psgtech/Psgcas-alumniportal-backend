@@ -28,25 +28,46 @@ const generateToken = (alumni) =>
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
   try {
+
+    const data = JSON.parse(req.body.payload);
+
     const {
       firstName,
       lastName,
       email,
       password,
       phone,
+      rollNumber,
+      gender,
+      occupation,
+
       department,
       graduationYear,
-      rollNumber,
-      currentCompany,
+      programmeType,
+      degree,
+      batchYear,
+      studyStartYear,
+      studyEndYear,
+
       jobTitle,
-      country,
+      currentCompany,
+      industry,
+      officeContact,
+
+      linkedin,
+      twitter,
+      instagram,
+      facebook,
+      website,
+
       city,
+      country,
       fullAddress,
       coordinates,
-      linkedin,
-    } = req.body;
+      
+    } = data;
 
-    if (!firstName || !lastName || !email || !password) {
+    if (!firstName || !email || !password) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -57,17 +78,62 @@ exports.register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // File upload handling
+    const files = {
+      businessCard: req.files?.businessCard?.[0]?.filename || null,
+      idCard: req.files?.idCard?.[0]?.filename || null,
+      entrepreneurPoster: req.files?.entrepreneurPoster?.[0]?.filename || null,
+      studentPhoto: req.files?.studentPhoto?.[0]?.filename || null,
+      currentPhoto: req.files?.currentPhoto?.[0]?.filename || null,
+    };
+
+    // Office Address
+    const officeAddress = {
+      line1: data.officeAddress?.line1 || "",
+      line2: data.officeAddress?.line2 || "",
+      city: data.officeAddress?.city || "",
+      state: data.officeAddress?.state || "",
+      pincode: data.officeAddress?.pincode || "",
+      country: data.officeAddress?.country || "",
+    };
+
+    // Social Links
+    const social = {
+      linkedin,
+      twitter,
+      instagram,
+      facebook,
+      website,
+    };
+
     const newAlumni = new Alumni({
+      alumniId : req.alumniId,
       firstName,
       lastName,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone,
+      rollNumber,
+      gender,
+      occupation,
+
       department,
       graduationYear: Number(graduationYear),
-      rollNumber,
-      currentCompany,
+      programmeType,
+      degree,
+      batchYear,
+      studyStartYear,
+      studyEndYear,
+
+      
       jobTitle,
+      currentCompany,
+      industry,
+      officeContact,
+      officeAddress,
+
+      social,
+
       country,
       city,
       fullAddress,
@@ -75,7 +141,8 @@ exports.register = async (req, res) => {
         type: "Point",
         coordinates,
       },
-      linkedin,
+      files,
+
       isApproved: false,
       isAdmin: false,
     });
