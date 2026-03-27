@@ -64,61 +64,179 @@ exports.getAlumniById = async (req, res) => {
 // @access  Private
 exports.updateAlumniProfile = async (req, res) => {
   try {
-    // Only allow users to update their own profile
+    // ── Authorization ──────────────────────────────────────────────────────
     if (req.user.id !== req.params.id && !req.user.isAdmin) {
       return res
         .status(403)
         .json({ message: "Not authorized to update this profile" });
     }
 
-    // Fields that can be updated
     const allowedFields = [
       "firstName",
       "lastName",
       "phone",
-      "linkedin",
+      "gender",
+      "occupation",
+
       "department",
       "graduationYear",
       "rollNumber",
+      "degree",
+      "programmeType",
+      "studyStartYear",
+      "studyEndYear",
+      "batchYear",
+
       "currentCompany",
       "jobTitle",
+      "industry",
+      "officeContact",
+
       "country",
       "city",
       "fullAddress",
     ];
 
     const updateData = {};
-    Object.keys(req.body).forEach((key) => {
-      if (allowedFields.includes(key)) {
+
+    allowedFields.forEach((key) => {
+      if (req.body[key] !== undefined) {
         updateData[key] = req.body[key];
       }
     });
 
+    // ── 2. Nested: social links ────────────────────────────────────────────
+    // Frontend sends either a JSON string or dot-notation keys like "social.linkedin"
+    const socialFields = [
+      "linkedin",
+      "twitter",
+      "instagram",
+      "facebook",
+      "website",
+    ];
+    const socialUpdate = {};
+
+    if (req.body.social) {
+      // Sent as a serialized JSON string e.g. FormData.append("social", JSON.stringify({...}))
+      try {
+        const parsed =
+          typeof req.body.social === "string"
+            ? JSON.parse(req.body.social)
+            : req.body.social;
+        socialFields.forEach((key) => {
+          if (parsed[key] !== undefined) socialUpdate[key] = parsed[key];
+        });
+      } catch (_) {
+        // malformed JSON — skip silently
+      }
+    } else {
+      // Sent as dot-notation keys e.g. "social.linkedin"
+      socialFields.forEach((key) => {
+        const dotKey = `social.${key}`;
+        if (req.body[dotKey] !== undefined)
+          socialUpdate[key] = req.body[dotKey];
+      });
+    }
+
+    if (Object.keys(socialUpdate).length > 0) {
+      // Merge into existing social sub-document (don't wipe keys not sent)
+      socialFields.forEach((key) => {
+        if (socialUpdate[key] !== undefined) {
+          updateData[`social.${key}`] = socialUpdate[key];
+        }
+      });
+    }
+
+    // ── 3. Nested: office address ──────────────────────────────────────────
+    const officeAddressFields = [
+      "line1",
+      "line2",
+      "city",
+      "state",
+      "pincode",
+      "country",
+    ];
+    const officeUpdate = {};
+
+    if (req.body.officeAddress) {
+      try {
+        const parsed =
+          typeof req.body.officeAddress === "string"
+            ? JSON.parse(req.body.officeAddress)
+            : req.body.officeAddress;
+        officeAddressFields.forEach((key) => {
+          if (parsed[key] !== undefined) officeUpdate[key] = parsed[key];
+        });
+      } catch (_) {
+        // malformed JSON — skip silently
+      }
+    } else {
+      officeAddressFields.forEach((key) => {
+        const dotKey = `officeAddress.${key}`;
+        if (req.body[dotKey] !== undefined)
+          officeUpdate[key] = req.body[dotKey];
+      });
+    }
+
+    if (Object.keys(officeUpdate).length > 0) {
+      officeAddressFields.forEach((key) => {
+        if (officeUpdate[key] !== undefined) {
+          updateData[`officeAddress.${key}`] = officeUpdate[key];
+        }
+      });
+    }
+
+    // ── 4. Geo coordinates → location GeoJSON ─────────────────────────────
+    if (req.body.coordinates) {
+      let coords = req.body.coordinates;
+      // multer / express may give an array or a comma-separated string
+      if (typeof coords === "string") {
+        coords = coords.split(",").map(Number);
+      } else if (Array.isArray(coords)) {
+        coords = coords.map(Number);
+      }
+      if (coords.length === 2 && coords.every((n) => !isNaN(n))) {
+        updateData.location = { type: "Point", coordinates: coords };
+      }
+    }
+
+    // ── 5. Profile photo (single, field name: "profileImage") ─────────────
     if (req.file) {
       updateData.profileImage = req.file.path.replace(/\\/g, "/");
     }
 
-    // if user sent geo coordinates, map them into the location field
-    if (req.body.coordinates) {
-      updateData.location = {
-        type: "Point",
-        coordinates: req.body.coordinates,
-      };
+    // ── 6. Document files (multiple, each under its own field name) ────────
+    // Expects multer fields: studentPhoto, currentPhoto, idCard,
+    //                        businessCard, entrepreneurPoster
+    const documentFields = [
+      "studentPhoto",
+      "currentPhoto",
+      "idCard",
+      "businessCard",
+      "entrepreneurPoster",
+    ];
+
+    if (req.files) {
+      documentFields.forEach((field) => {
+        const uploaded = req.files[field];
+        if (uploaded && uploaded.length > 0) {
+          updateData[`files.${field}`] = uploaded[0].path.replace(/\\/g, "/");
+        }
+      });
     }
 
-    const alumni = await Alumni.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true,
-    }).select("-password");
+    // ── 7. Persist ─────────────────────────────────────────────────────────
+    const alumni = await Alumni.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData }, // $set so dot-notation merges nested fields safely
+      { new: true, runValidators: true },
+    ).select("-password");
 
     if (!alumni) {
       return res.status(404).json({ message: "Alumni not found" });
     }
 
-    res.json({
-      message: "Profile updated successfully",
-      alumni,
-    });
+    res.json({ message: "Profile updated successfully", alumni });
   } catch (error) {
     console.error("Update Alumni Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
