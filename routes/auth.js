@@ -12,9 +12,10 @@ const {
   resetPassword,
 } = require("../controllers/authController");
 const { authMiddleware } = require("../middleware/auth");
+const { alumniUpload } = require("../middleware/alumniUploads");
 
 // Public routes
-router.post("/register", register);
+router.post("/register", alumniUpload, register);
 router.post("/login", login);
 router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);

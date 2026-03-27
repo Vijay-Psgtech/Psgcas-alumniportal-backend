@@ -28,6 +28,9 @@ const generateToken = (alumni) =>
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
   try {
+
+    const data = JSON.parse(req.body.payload);
+    
     const {
       firstName,
       lastName,
@@ -62,7 +65,7 @@ exports.register = async (req, res) => {
       fullAddress,
       coordinates,
       
-    } = req.body;
+    } = data;
 
     if (!firstName || !email || !password) {
       return res.status(400).json({ message: "Required fields missing" });
@@ -86,12 +89,12 @@ exports.register = async (req, res) => {
 
     // Office Address
     const officeAddress = {
-      line1: req.body.officeAddress?.line1 || "",
-      line2: req.body.officeAddress?.line2 || "",
-      city: req.body.officeAddress?.city || "",
-      state: req.body.officeAddress?.state || "",
-      pincode: req.body.officeAddress?.pincode || "",
-      country: req.body.officeAddress?.country || "",
+      line1: data.officeAddress?.line1 || "",
+      line2: data.officeAddress?.line2 || "",
+      city: data.officeAddress?.city || "",
+      state: data.officeAddress?.state || "",
+      pincode: data.officeAddress?.pincode || "",
+      country: data.officeAddress?.country || "",
     };
 
     // Social Links
