@@ -34,19 +34,37 @@ exports.register = async (req, res) => {
       email,
       password,
       phone,
+      rollNumber,
+      gender,
+      occupation,
+
       department,
       graduationYear,
-      rollNumber,
-      currentCompany,
+      programmeType,
+      degree,
+      batchYear,
+      studyStartYear,
+      studyEndYear,
+
       jobTitle,
-      country,
+      currentCompany,
+      industry,
+      officeContact,
+
+      linkedin,
+      twitter,
+      instagram,
+      facebook,
+      website,
+
       city,
+      country,
       fullAddress,
       coordinates,
-      linkedin,
+      
     } = req.body;
 
-    if (!firstName || !lastName || !email || !password) {
+    if (!firstName || !email || !password) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -57,17 +75,68 @@ exports.register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // File upload handling
+    const files = {
+      businessCard: req.files?.businessCard?.[0]?.filename || null,
+      idCard: req.files?.idCard?.[0]?.filename || null,
+      entrepreneurPoster: req.files?.entrepreneurPoster?.[0]?.filename || null,
+      studentPhoto: req.files?.studentPhoto?.[0]?.filename || null,
+      currentPhoto: req.files?.currentPhoto?.[0]?.filename || null,
+    };
+
+    // Office Address
+    const officeAddress = {
+      line1: req.body.officeAddress?.line1 || "",
+      line2: req.body.officeAddress?.line2 || "",
+      city: req.body.officeAddress?.city || "",
+      state: req.body.officeAddress?.state || "",
+      pincode: req.body.officeAddress?.pincode || "",
+      country: req.body.officeAddress?.country || "",
+    };
+
+    // Social Links
+    const social = {
+      linkedin,
+      twitter,
+      instagram,
+      facebook,
+      website,
+    };
+
+    // Generate Alumni ID
+    const count = await Alumni.countDocuments();
+
+    const alumniId = `PSGCAS-ALU-${String(count + 1).padStart(6, "0")}`;
+
+
     const newAlumni = new Alumni({
+      alumniId,
       firstName,
       lastName,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone,
+      rollNumber,
+      gender,
+      occupation,
+
       department,
       graduationYear: Number(graduationYear),
-      rollNumber,
-      currentCompany,
+      programmeType,
+      degree,
+      batchYear,
+      studyStartYear,
+      studyEndYear,
+
+      
       jobTitle,
+      currentCompany,
+      industry,
+      officeContact,
+      officeAddress,
+
+      social,
+
       country,
       city,
       fullAddress,
@@ -75,7 +144,8 @@ exports.register = async (req, res) => {
         type: "Point",
         coordinates,
       },
-      linkedin,
+      files,
+
       isApproved: false,
       isAdmin: false,
     });
