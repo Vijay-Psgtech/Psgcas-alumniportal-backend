@@ -30,7 +30,7 @@ exports.register = async (req, res) => {
   try {
 
     const data = JSON.parse(req.body.payload);
-    
+
     const {
       firstName,
       lastName,
@@ -106,14 +106,8 @@ exports.register = async (req, res) => {
       website,
     };
 
-    // Generate Alumni ID
-    const count = await Alumni.countDocuments();
-
-    const alumniId = `PSGCAS-ALU-${String(count + 1).padStart(6, "0")}`;
-
-
     const newAlumni = new Alumni({
-      alumniId,
+      alumniId : req.alumniId,
       firstName,
       lastName,
       email: email.toLowerCase(),
