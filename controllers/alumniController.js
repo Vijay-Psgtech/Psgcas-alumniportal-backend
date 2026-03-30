@@ -7,7 +7,7 @@ const Alumni = require("../models/Alumni");
 exports.getAllAlumni = async (req, res) => {
   try {
     const { department, graduationYear, country, city, search } = req.query;
-
+    const totalCount = await Alumni.countDocuments();
     // Build filter
     let filter = { isApproved: true };
 
@@ -29,7 +29,7 @@ exports.getAllAlumni = async (req, res) => {
 
     res.json({
       message: "Alumni retrieved successfully",
-      count: alumni.length,
+      count: totalCount,
       alumni,
     });
   } catch (error) {
@@ -325,3 +325,99 @@ exports.getMapData = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// Get /api/alumni/alumni-batchYear
+// Alumni batchwise 
+exports.getAlumniBatchWise = async (req, res) => {
+  try {
+    const {
+      batchYear,
+      department,
+      search,
+      page = 1,
+      limit = 12,
+      sort = "desc",
+    } = req.query;
+
+    const query = {};
+
+    // Batch filter
+    if (batchYear) {
+      query.batchYear = batchYear;
+    }
+
+    // Department filter
+    if (department) {
+      query.department = department;
+    }
+
+    // Search filter
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: "i" } },
+        { lastName: { $regex: search, $options: "i" } },
+        { currentCompany: { $regex: search, $options: "i" } },
+        { jobTitle: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const alumni = await Alumni.find(query)
+      .sort({ batchYear: sort === "asc" ? 1 : -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .select("-password");
+
+    const total = await Alumni.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: alumni.length,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / limit),
+      alumni,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch alumni",
+      error: error.message,
+    });
+  }
+};
+
+
+exports.getAlumniGroupedByBatch = async (req, res) => {
+  try {
+    const alumni = await Alumni.aggregate([
+      {
+        $group: {
+          _id: "$batchYear",
+          alumni: { $push: "$$ROOT" },
+        },
+      },
+      {
+        $sort: { _id: -1 },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: alumni,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to fetch alumni",
+      error: error.message,
+    });
+  }
+};
+
+exports.batches = async (req, res) => {
+  const batches = await Alumni.distinct("batchYear");
+  res.json({
+    batches: batches.sort((a, b) => b - a),
+  });
+}
