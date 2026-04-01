@@ -12,8 +12,8 @@ const upload = require("../middleware/uploads");
 
 router.get("/", getAllNewsLetters);
 router.get("/:id", getNewsLetterById);
-router.post("/", upload.single("image"), createNewsLetter);
-router.put("/:id", upload.single("image"), updateNewsLetter);
+router.post("/", upload.single("imageUrl"), createNewsLetter);
+router.put("/:id", upload.single("imageUrl"), updateNewsLetter);
 router.delete("/:id", deleteNewsLetter);
 router.get("/category/:category", getNewsLettersByCategory);
 
