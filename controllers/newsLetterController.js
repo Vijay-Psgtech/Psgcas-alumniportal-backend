@@ -2,7 +2,7 @@ const Newsletter = require("../models/Newsletter");
 
 exports.getAllNewsLetters = async (req, res) => {
   try {
-    const newsletters = await Newsletter.find().sort({ date: -1 });
+    const newsletters = await Newsletter.find().sort({ createdAt: -1 });
     res.json({ success: true, data: newsletters });
   } catch (error) {
     console.error("Error fetching newsletters:", error);
@@ -52,12 +52,20 @@ exports.createNewsLetter = async (req, res) => {
       date,
       category: category || "Newsletters",
       description,
-      imageUrl,
-      pdfUrl,
-
       tags,
       author,
     });
+
+    // Handle file upload for imageUrl if provided
+    if (req.file) {
+      newNewsletter.imageUrl = req.file.path;
+    }
+    
+    // Handle file upload for pdfUrl if provided
+    if (req.files && req.files.pdf) {
+        newNewsletter.pdfUrl = req.files.pdf[0].path;
+    }
+    
     const savedNewsletter = await newNewsletter.save();
     res.status(201).json({ success: true, data: savedNewsletter });
   } catch (error) {
