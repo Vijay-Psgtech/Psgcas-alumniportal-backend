@@ -12,6 +12,10 @@ const storage = multer.diskStorage({
       folder += "alumniProfile/";
     } else if (req.baseUrl.includes("albums")) {
       folder += "albums/";
+    } else if (req.baseUrl.includes("newsletters")) {
+      folder += "newsletters/";
+    } else {
+      folder += "others/";
     }
 
     // create folder if not exsits
