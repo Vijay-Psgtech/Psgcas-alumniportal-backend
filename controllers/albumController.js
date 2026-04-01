@@ -53,6 +53,7 @@ exports.getAlbumByYear = async (req, res) => {
 
 // ── CREATE new album ────────────────────────────────────────────────
 exports.createAlbum = async (req, res) => {
+  console.log("Body", req.body);
   try {
     const { year, title, event, date, photos, accent, tags } = req.body;
 
@@ -73,6 +74,11 @@ exports.createAlbum = async (req, res) => {
       tags: tags || [event],
     });
 
+    // Handle file uploads if needed (multiple images)
+    if (req.files && req.files.length > 0) {
+      newAlbum.images = req.files.map((file) => file.path);
+    }
+
     const savedAlbum = await newAlbum.save();
     res.status(201).json({ success: true, data: savedAlbum });
   } catch (error) {
@@ -86,28 +92,26 @@ exports.updateAlbum = async (req, res) => {
   try {
     const { title, event, date, photos, accent, tags } = req.body;
 
-    const updateData = {
-      title,
-      event,
-      date,
-      photos: Number(photos) || 0,
-      accent,
-      tags,
-      updatedAt: new Date(),
-    };
-
-    const updatedAlbum = await Album.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true },
-    );
-
-    if (!updatedAlbum) {
+    const album = await Album.findById(req.params.id);
+    if (!album) {
       return res
         .status(404)
         .json({ success: false, message: "Album not found" });
     }
 
+    album.title = title ?? album.title;
+    album.event = event ?? album.event;
+    album.date = date ?? album.date;
+    album.photos = Number(photos) || album.photos;
+    album.accent = accent ?? album.accent;
+    album.tags = tags ?? album.tags;
+    album.updatedAt = new Date();
+
+    if (req.files && req.files.length > 0) {
+      album.images.push(...req.files.map((file) => file.path));
+    }
+
+    const updatedAlbum = await album.save();
     res.json({ success: true, data: updatedAlbum });
   } catch (error) {
     console.error("Error updating album:", error);
