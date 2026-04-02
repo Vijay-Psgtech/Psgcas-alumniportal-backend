@@ -216,10 +216,14 @@ exports.updateAlumniProfile = async (req, res) => {
     ];
 
     if (req.files) {
+      const alumniFolderId = req.alumniId;
       documentFields.forEach((field) => {
         const uploaded = req.files[field];
         if (uploaded && uploaded.length > 0) {
-          updateData[`files.${field}`] = uploaded[0].path.replace(/\\/g, "/");
+          const filename = uploaded[0].filename;
+          updateData[`files.${field}`] = alumniFolderId
+            ? `alumni/${alumniFolderId}/${filename}`
+            : uploaded[0].path.replace(/\\/g, "/");
         }
       });
     }

@@ -1,15 +1,36 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const Alumni = require("../models/Alumni");
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    let folder = `uploads/alumni/${req.alumniId}/`;
+    const createFolder = (alumniId) => {
+      if (!alumniId) {
+        return cb(new Error("Missing alumni identifier for upload destination"));
+      }
+      const folder = `uploads/alumni/${alumniId}/`;
+      fs.mkdirSync(folder, { recursive: true });
+      req.alumniId = alumniId;
+      cb(null, folder);
+    };
 
-    // Create folder
-    fs.mkdirSync(folder, { recursive: true });
+    if (req.alumniId) {
+      return createFolder(req.alumniId);
+    }
 
-    cb(null, folder);
+    if (req.params?.id) {
+      return Alumni.findById(req.params.id)
+        .then((alumni) => {
+          if (!alumni) {
+            return cb(new Error("Alumni not found for upload destination"));
+          }
+          createFolder(alumni.alumniId);
+        })
+        .catch(cb);
+    }
+
+    cb(new Error("Missing alumni identifier for upload destination"));
 
   },
 
