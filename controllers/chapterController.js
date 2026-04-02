@@ -51,16 +51,18 @@ exports.getChapters = async (req, res) => {
 
     // ✅ lean() = plain JS objects, no crash on null refs
     // ✅ select("-members") = skip large members array, use memberCount
-    const chapters = await Chapter.find(query)
-      .select("-members")
-      .populate({
-        path: "foundedBy",
-        select: "firstName lastName profileImage",
-      })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
+    // const chapters = await Chapter.find(query)
+    //   .select("-members")
+    //   .populate({
+    //     path: "foundedBy",
+    //     select: "firstName lastName profileImage",
+    //   })
+    //   .sort({ createdAt: -1 })
+    //   .skip(skip)
+    //   .limit(parseInt(limit))
+    //   .lean();
+
+    const chapters = await Chapter.find();
 
     const total = await Chapter.countDocuments(query);
 
