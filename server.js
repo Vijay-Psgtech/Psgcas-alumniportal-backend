@@ -76,6 +76,9 @@ app.use("/api/donations", require("./routes/donation"));
 // Chapters
 app.use("/api/alumni/chapters", require("./routes/chapters"));
 
+// Notifications (alumni submit + admin approve/reject)
+app.use("/api/notifications", require("./routes/notifications"));
+
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
 
