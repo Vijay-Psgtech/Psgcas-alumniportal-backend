@@ -55,10 +55,6 @@ const AlumniSchema = new mongoose.Schema(
       type: String,
       required: [true, "Department is required"],
     },
-    graduationYear: {
-      type: Number,
-      required: [true, "Graduation year is required"],
-    },
     programmeType: {
       type: String,
       trim: true,
@@ -69,6 +65,7 @@ const AlumniSchema = new mongoose.Schema(
     },
     batchYear: {
       type: String,
+      required: [true, "Batch year is required"],
     },
     studyStartYear: {
       type: String,
@@ -180,7 +177,7 @@ const AlumniSchema = new mongoose.Schema(
 );
 
 AlumniSchema.index({ location: "2dsphere" }); // Geospatial index for location
-AlumniSchema.index({ graduationYear: 1 });
+AlumniSchema.index({ batchYear: 1 });
 AlumniSchema.index({ department: 1 });
 AlumniSchema.index({ isApproved: 1 }); // Index for filtering approved alumni
 

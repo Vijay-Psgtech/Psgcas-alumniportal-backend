@@ -5,13 +5,13 @@ const Event = require("../models/Events");
 // GET /api/admin/dashboard/alumni/all
 exports.getAllAlumniForAdmin = async (req, res) => {
   try {
-    const { status, search, department, graduationYear, sortBy } = req.query;
+    const { status, search, department, batchYear, sortBy } = req.query;
 
     let filter = {};
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
     if (department) filter.department = department;
-    if (graduationYear) filter.graduationYear = parseInt(graduationYear);
+    if (batchYear) filter.batchYear = parseInt(batchYear);
     if (search) {
       filter.$or = [
         { firstName: { $regex: search, $options: "i" } },
@@ -24,7 +24,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     let sortOptions = { createdAt: -1 };
     if (sortBy === "name") sortOptions = { firstName: 1, lastName: 1 };
     else if (sortBy === "email") sortOptions = { email: 1 };
-    else if (sortBy === "year") sortOptions = { graduationYear: -1 };
+    else if (sortBy === "year") sortOptions = { batchYear: -1 };
 
     const alumni = await Alumni.find(filter)
       .select("-password")

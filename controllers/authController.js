@@ -42,7 +42,6 @@ exports.register = async (req, res) => {
       occupation,
 
       department,
-      graduationYear,
       programmeType,
       degree,
       batchYear,
@@ -132,7 +131,6 @@ exports.register = async (req, res) => {
       occupation,
 
       department,
-      graduationYear: Number(graduationYear),
       programmeType,
       degree,
       batchYear,

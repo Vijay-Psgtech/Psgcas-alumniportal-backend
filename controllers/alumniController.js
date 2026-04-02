@@ -6,13 +6,13 @@ const Alumni = require("../models/Alumni");
 // @access  Public
 exports.getAllAlumni = async (req, res) => {
   try {
-    const { department, graduationYear, country, city, search } = req.query;
+    const { department, batchYear, country, city, search } = req.query;
     const totalCount = await Alumni.countDocuments();
     // Build filter
     let filter = { isApproved: true };
 
     if (department) filter.department = department;
-    if (graduationYear) filter.graduationYear = parseInt(graduationYear);
+    if (batchYear) filter.batchYear = parseInt(batchYear);
     if (country) filter.country = country;
     if (city) filter.city = city;
 
@@ -79,7 +79,6 @@ exports.updateAlumniProfile = async (req, res) => {
       "occupation",
 
       "department",
-      "graduationYear",
       "rollNumber",
       "degree",
       "programmeType",

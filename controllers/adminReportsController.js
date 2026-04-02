@@ -7,7 +7,7 @@ exports.getAlumniByYear = async (req, res) => {
     const countByYear = await Alumni.aggregate([
       {
         $project: {
-          year: "$graduationYear",
+          year: "$batchYear",
         },
       },
       {
