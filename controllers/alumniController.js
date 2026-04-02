@@ -243,33 +243,6 @@ exports.updateAlumniProfile = async (req, res) => {
   }
 };
 
-// @route   GET /api/alumni/stats/get-stats
-// @desc    Get alumni statistics
-// @access  Public
-exports.getStats = async (req, res) => {
-  try {
-    const totalAlumni = await Alumni.countDocuments({ isApproved: true });
-    const totalCountries = await Alumni.distinct("country", {
-      isApproved: true,
-    });
-    const totalCities = await Alumni.distinct("city", { isApproved: true });
-    const pendingApprovals = await Alumni.countDocuments({ isApproved: false });
-
-    res.json({
-      message: "Statistics retrieved successfully",
-      stats: {
-        totalAlumni,
-        countriesRepresented: totalCountries.length,
-        citiesRepresented: totalCities.length,
-        pendingApprovals,
-      },
-    });
-  } catch (error) {
-    console.error("Get Stats Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
-
 // @route   GET /api/alumni/map/data
 // @desc    Get alumni data for map visualization
 // @access  Public
@@ -417,7 +390,59 @@ exports.getAlumniGroupedByBatch = async (req, res) => {
 
 exports.batches = async (req, res) => {
   const batches = await Alumni.distinct("batchYear");
+  const batchesWithCounts = await Alumni.aggregate([
+    { $match: { batchYear: { $in: batches } } },
+    {
+      $group: {
+        _id: "$batchYear",
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: -1 } }, 
+  ])
   res.json({
     batches: batches.sort((a, b) => b - a),
+    batchesWithCounts
   });
 }
+
+// Get alumni totalcount, batchwise count, departmentwise count, etc. for stats page
+exports.getAlumniStats = async (req, res) => {
+  try {
+    const totalAlumni = await Alumni.countDocuments({ isApproved: true });
+    const batchStats = await Alumni.aggregate([
+      { $match: { isApproved: true } },
+      {
+        $group: { 
+          _id: "$batchYear",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: -1 } },
+    ]);
+
+    const departmentStats = await Alumni.aggregate([  
+      { $match: { isApproved: true } },
+      {
+        $group: {
+          _id: "$department",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalAlumni,
+        batchStats: batchStats.length,
+        departmentStats: departmentStats.length,
+      },
+
+    });
+  } catch (error) {
+    console.error("Get Alumni Stats Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
