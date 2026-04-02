@@ -49,6 +49,9 @@ app.get("/api/health", (_req, res) =>
 // Auth: register, login, forgot-password, verify-otp, reset-password, profile
 app.use("/api/auth", require("./routes/auth"));
 
+// Chapters must be mounted before /api/alumni, otherwise /api/alumni/:id catches /api/alumni/chapters
+app.use("/api/alumni/chapters", require("./routes/chapters"));
+
 // Alumni directory (public + protected profile update)
 app.use("/api/alumni", require("./routes/alumni"));
 
@@ -69,6 +72,9 @@ app.use("/api/newsletters", require("./routes/newsletters"));
 
 // Donations (public create + protected mine + admin all)
 app.use("/api/donations", require("./routes/donation"));
+
+// Chapters
+app.use("/api/alumni/chapters", require("./routes/chapters"));
 
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
