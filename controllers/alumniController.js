@@ -200,8 +200,8 @@ exports.updateAlumniProfile = async (req, res) => {
     }
 
     // ── 5. Profile photo (single, field name: "profileImage") ─────────────
-    if (req.file) {
-      updateData.profileImage = req.file.path.replace(/\\/g, "/");
+    if (req.files && req.files.profileImage && req.files.profileImage.length > 0) {
+      updateData.profileImage = req.files.profileImage[0].path.replace(/\\/g, "/");
     }
 
     // ── 6. Document files (multiple, each under its own field name) ────────
