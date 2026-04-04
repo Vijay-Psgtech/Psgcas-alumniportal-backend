@@ -435,12 +435,38 @@ exports.getAlumniStats = async (req, res) => {
       { $sort: { count: -1 } },
     ]);
 
+    const countryStats = await Alumni.aggregate([
+      { $match: { isApproved: true } },
+      {
+        $group: {
+          _id: "$country",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    const topCities = await Alumni.aggregate([
+      { $match: { isApproved: true, city: { $exists: true } } },
+      {
+        $group: {
+          _id: "$city",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+
+
     res.json({
       success: true,
       data: {
         totalAlumni,
         batchStats: batchStats.length,
         departmentStats: departmentStats.length,
+        countryStats: countryStats.length,
+        topCities: topCities.length,
       },
 
     });
