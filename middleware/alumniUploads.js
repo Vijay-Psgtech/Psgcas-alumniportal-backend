@@ -47,6 +47,10 @@ const storage = multer.diskStorage({
       fileName = "student-photo";
     } else if (file.fieldname === "currentPhoto") {
       fileName = "current-photo";
+    } else if (file.fieldname === "profileImage") {
+      fileName = "profile-image";
+    } else {
+      return cb(new Error("Unexpected file field: " + file.fieldname));
     }
 
     const ext = path.extname(file.originalname);
@@ -64,6 +68,7 @@ const alumniUpload = upload.fields([
   { name: "entrepreneurPoster", maxCount: 1 },
   { name: "studentPhoto", maxCount: 1 },
   { name: "currentPhoto", maxCount: 1 },
+  { name: "profileImage", maxCount: 1 },
 ]);
 
 module.exports = { alumniUpload };

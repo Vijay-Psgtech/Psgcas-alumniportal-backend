@@ -200,8 +200,8 @@ exports.updateAlumniProfile = async (req, res) => {
     }
 
     // ── 5. Profile photo (single, field name: "profileImage") ─────────────
-    if (req.file) {
-      updateData.profileImage = req.file.path.replace(/\\/g, "/");
+    if (req.files && req.files.profileImage && req.files.profileImage.length > 0) {
+      updateData.profileImage = req.files.profileImage[0].path.replace(/\\/g, "/");
     }
 
     // ── 6. Document files (multiple, each under its own field name) ────────
@@ -435,12 +435,38 @@ exports.getAlumniStats = async (req, res) => {
       { $sort: { count: -1 } },
     ]);
 
+    const countryStats = await Alumni.aggregate([
+      { $match: { isApproved: true } },
+      {
+        $group: {
+          _id: "$country",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    const topCities = await Alumni.aggregate([
+      { $match: { isApproved: true, city: { $exists: true } } },
+      {
+        $group: {
+          _id: "$city",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+
+
     res.json({
       success: true,
       data: {
         totalAlumni,
         batchStats: batchStats.length,
         departmentStats: departmentStats.length,
+        countryStats: countryStats.length,
+        topCities: topCities.length,
       },
 
     });
