@@ -1,6 +1,7 @@
 const Alumni = require("../models/Alumni");
 const Donation = require("../models/Donation");
 const Event = require("../models/Events");
+const Album = require("../models/Album");
 
 // GET /api/admin/dashboard/alumni/all
 exports.getAllAlumniForAdmin = async (req, res) => {
@@ -52,6 +53,7 @@ exports.getDashboardStats = async (req, res) => {
       completedDonations,
       pendingDonations,
       totalEvents,
+      albumsCount,
     ] = await Promise.all([
       Alumni.countDocuments(),
       Alumni.countDocuments({ isApproved: true }),
@@ -60,6 +62,7 @@ exports.getDashboardStats = async (req, res) => {
       Donation.find({ status: "completed" }),
       Donation.countDocuments({ status: "pending" }),
       Event.countDocuments(),
+      Album.countDocuments(),
     ]);
 
     res.json({
@@ -76,6 +79,7 @@ exports.getDashboardStats = async (req, res) => {
         ),
         pendingDonations: pendingDonations || 0,
         totalEvents: totalEvents || 0,
+        totalAlbums: albumsCount || 0,
       },
     });
   } catch (error) {
