@@ -1,4 +1,5 @@
 const Album = require("../models/Album");
+const fs = require("fs");
 
 // ── GET all albums (grouped by year) ────────────────────────────────
 exports.getAllAlbum = async (req, res) => {
@@ -55,7 +56,15 @@ exports.getAlbumByYear = async (req, res) => {
 exports.createAlbum = async (req, res) => {
   console.log("Body", req.body);
   try {
-    const { year, title, event, date, photos, accent, tags } = req.body;
+    let { year, title, event, date, photos, accent, tags } = req.body;
+
+    // Extract year from date if not provided
+    if (!year && date) {
+      const parsedDate = new Date(date);
+      if (!isNaN(parsedDate.getTime())) {
+        year = parsedDate.getFullYear();
+      }
+    }
 
     if (!year || !title || !event) {
       return res
@@ -92,7 +101,7 @@ exports.updateAlbum = async (req, res) => {
   try {
     const { title, event, date, photos, accent, tags } = req.body;
 
-    const album = await Album.findById(req.params.id);
+    const album = await Album.findOne({ id: req.params.id });
     if (!album) {
       return res
         .status(404)
@@ -122,7 +131,18 @@ exports.updateAlbum = async (req, res) => {
 // ── DELETE album ────────────────────────────────────────────────────
 exports.deleteAlbum = async (req, res) => {
   try {
-    const deletedAlbum = await Album.findByIdAndDelete(req.params.id);
+    const deletedAlbum = await Album.findOneAndDelete({ id: req.params.id });
+
+    // Delete associated images from filesystem if needed
+    if (deletedAlbum && deletedAlbum.images) {
+      deletedAlbum.images.forEach((imagePath) => {
+        fs.unlink(imagePath, (err) => {
+          if (err) {
+            console.error("Error deleting image file:", err);
+          }
+        });
+      });
+    }
 
     if (!deletedAlbum) {
       return res
