@@ -1,34 +1,33 @@
 const Album = require("../models/Album");
 const fs = require("fs");
 
-// ── GET all albums (grouped by year) ────────────────────────────────
 exports.getAllAlbum = async (req, res) => {
   try {
-    const albums = await Album.find().sort({ year: -1, date: -1 });
+    const albums = await Album.find().sort({ createdAt: -1 });
 
-    // group by year
-    const grouped = albums.reduce((acc, album) => {
-      const year = album.year;
-      if (!acc[year]) {
-        acc[year] = {
-          year,
-          coverColor: "#667eea",
-          totalPhotos: 0,
-          totalEvents: 0,
-          albums: [],
-        };
-      }
-      acc[year].albums.push(album);
-      acc[year].totalPhotos += album.photos;
-      acc[year].totalEvents = acc[year].albums.length;
-      return acc;
-    }, {});
-    res.json({ success: true, data: grouped });
-  } catch (error) {
+    const albumsData = albums.map(album => ({
+      id: album.id,
+      year: album.year,
+      title: album.title,
+      event: album.event,
+      date: album.date,
+      photos: album.photos,
+      accent: album.accent,
+      tags: album.tags,
+      images: album.images,
+      coverImage: album.images && album.images.length > 0 ? album.images[0] : null,
+      createdAt: album.createdAt,
+      updatedAt: album.updatedAt,
+    }));
+
+
+    res.json({ success: true, data: albumsData });
+
+  } catch(error) {
     console.error("Error fetching albums:", error);
     res.status(500).json({ success: false, message: "Failed to fetch albums" });
   }
-};
+}
 
 // ── GET albums for a specific year ──────────────────────────────────
 exports.getAlbumByYear = async (req, res) => {
