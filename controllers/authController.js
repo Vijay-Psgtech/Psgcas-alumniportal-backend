@@ -183,8 +183,6 @@ exports.register = async (req, res) => {
 };
 
 // @route   POST /api/auth/login
-// ✅ FIX: Returns 401 (not 403) for unapproved so frontend error handler works uniformly.
-//         Also returns isApproved flag so frontend can show correct message.
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -297,21 +295,6 @@ exports.login = async (req, res) => {
 };
 
 // @route   GET /api/auth/profile
-// exports.getProfile = async (req, res) => {
-//   try {
-//     const alumni = await Alumni.findById(req.user.id).select("-password");
-
-//     if (!alumni) {
-//       return res.status(404).json({ message: "Alumni not found" });
-//     }
-
-//     res.json({ message: "Profile retrieved successfully", alumni });
-//   } catch (error) {
-//     console.error("Get Profile Error:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
-
 exports.getProfile = async (req, res) => {
   try {
     const { id, type, role } = req.user;
@@ -429,7 +412,6 @@ exports.forgotPassword = async (req, res) => {
 };
 
 // @route   POST /api/auth/verify-otp
-// ✅ NEW: Verifies the OTP before allowing password reset
 exports.verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -467,7 +449,6 @@ exports.verifyOtp = async (req, res) => {
 };
 
 // @route   POST /api/auth/reset-password
-// ✅ NEW: Resets password after OTP verification
 exports.resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
