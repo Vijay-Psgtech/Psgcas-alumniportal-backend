@@ -27,9 +27,6 @@ const generateToken = (payload) =>
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
   try {
-
-    const data = JSON.parse(req.body.payload);
-
     const {
       firstName,
       lastName,
@@ -39,44 +36,52 @@ exports.register = async (req, res) => {
       rollNumber,
       gender,
       occupation,
-
       department,
       programmeType,
       degree,
       batchYear,
       studyStartYear,
       studyEndYear,
-
       jobTitle,
       currentCompany,
       industry,
       officeContact,
-
       linkedin,
       twitter,
       instagram,
       facebook,
       website,
-
       city,
       country,
       fullAddress,
-      coordinates,
-      
-    } = data;
+    } = req.body;
 
     if (!firstName || !email || !password) {
-      return res.status(400).json({ message: "Required fields missing" });
+      return res.status(400).json({
+        message: "Required fields missing",
+      });
     }
 
-    const existingAlumni = await Alumni.findOne({ email: email.toLowerCase() });
+    const existingAlumni = await Alumni.findOne({
+      email: email.toLowerCase(),
+    });
+
     if (existingAlumni) {
-      return res.status(400).json({ message: "Email already registered" });
+      return res.status(400).json({
+        message: "Email already registered",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // File upload handling
+    const coordinates = req.body.coordinates
+      ? JSON.parse(req.body.coordinates)
+      : [0, 0];
+
+    const officeAddress = req.body.officeAddress
+      ? JSON.parse(req.body.officeAddress)
+      : {};
+
     const files = {
       businessCard: req.files?.businessCard?.[0]
         ? `alumni/${req.alumniId}/${req.files.businessCard[0].filename}`
@@ -99,27 +104,8 @@ exports.register = async (req, res) => {
         : null,
     };
 
-    // Office Address
-    const officeAddress = {
-      line1: data.officeAddress?.line1 || "",
-      line2: data.officeAddress?.line2 || "",
-      city: data.officeAddress?.city || "",
-      state: data.officeAddress?.state || "",
-      pincode: data.officeAddress?.pincode || "",
-      country: data.officeAddress?.country || "",
-    };
-
-    // Social Links
-    const social = {
-      linkedin,
-      twitter,
-      instagram,
-      facebook,
-      website,
-    };
-
-    const newAlumni = new Alumni({
-      alumniId : req.alumniId,
+    const newAlumni = await Alumni.create({
+      alumniId : req.alumniId,      
       firstName,
       lastName,
       email: email.toLowerCase(),
@@ -136,52 +122,63 @@ exports.register = async (req, res) => {
       studyStartYear,
       studyEndYear,
 
-      
       jobTitle,
       currentCompany,
       industry,
       officeContact,
       officeAddress,
 
-      social,
+      social: {
+        linkedin,
+        twitter,
+        instagram,
+        facebook,
+        website,
+      },
 
-      country,
       city,
+      country,
       fullAddress,
+
       location: {
         type: "Point",
         coordinates,
       },
+
       files,
 
       isApproved: false,
       isAdmin: false,
     });
 
-    await newAlumni.save();
+    const token = generateToken({
+      id: newAlumni._id,
+      email: newAlumni.email,
+      role: "alumni",
+      type: "alumni",
+    });
 
-    // Issue a token so they can poll /profile for approval status
-    const token = generateToken(newAlumni);
-
-    // ── Set JWT as HttpOnly cookie ───────────────────────────────
     res.cookie("token", token, COOKIE_OPTIONS);
 
     res.status(201).json({
       message: "Registration successful! Waiting for admin approval.",
       alumni: {
         _id: newAlumni._id,
+        alumniId: newAlumni.alumniId,
         firstName: newAlumni.firstName,
         lastName: newAlumni.lastName,
         email: newAlumni.email,
+        role: newAlumni.role,
         isApproved: newAlumni.isApproved,
-        isAdmin: newAlumni.isAdmin,
       },
     });
   } catch (error) {
     console.error("Register Error:", error);
-    res
-      .status(500)
-      .json({ message: "Registration failed", error: error.message });
+
+    res.status(500).json({
+      message: "Registration failed",
+      error: error.message,
+    });
   }
 };
 
