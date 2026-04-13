@@ -49,7 +49,6 @@ exports.getDashboardStats = async (req, res) => {
       totalAlumni,
       approvedAlumni,
       pendingAlumni,
-      adminAlumni,
       completedDonations,
       pendingDonations,
       totalEvents,
@@ -58,7 +57,6 @@ exports.getDashboardStats = async (req, res) => {
       Alumni.countDocuments(),
       Alumni.countDocuments({ isApproved: true }),
       Alumni.countDocuments({ isApproved: false }),
-      Alumni.countDocuments({ isAdmin: true }),
       Donation.find({ status: "completed" }),
       Donation.countDocuments({ status: "pending" }),
       Event.countDocuments(),
@@ -71,7 +69,6 @@ exports.getDashboardStats = async (req, res) => {
         totalAlumni: totalAlumni || 0,
         approvedAlumni: approvedAlumni || 0,
         pendingAlumni: pendingAlumni || 0,
-        adminAlumni: adminAlumni || 0,
         completedDonations: completedDonations.length || 0,
         totalDonatedAmount: completedDonations.reduce(
           (sum, d) => sum + d.amount,
