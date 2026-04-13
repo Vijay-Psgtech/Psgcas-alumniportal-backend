@@ -19,6 +19,7 @@ const authMiddleware = (req, res, next) => {
     );
 
     req.user = decoded;
+    req.user._id = decoded.id;  // Map 'id' to '_id' for controller consistency
     req.userId = decoded.id;
 
     next();
