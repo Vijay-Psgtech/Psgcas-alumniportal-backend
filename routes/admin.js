@@ -14,6 +14,5 @@ router.use(authMiddleware, adminMiddleware);
 router.get("/pending", getPendingAlumni);
 router.put("/approve/:id", approveAlumni);
 router.put("/reject/:id", rejectAlumni);
-router.put("/make-admin/:id", makeAdmin);
 
 module.exports = router;

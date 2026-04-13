@@ -42,20 +42,3 @@ exports.rejectAlumni = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-// PUT /api/admin/make-admin/:id
-exports.makeAdmin = async (req, res) => {
-  try {
-    const alumni = await Alumni.findByIdAndUpdate(
-      req.params.id,
-      { isAdmin: true },
-      { new: true },
-    ).select("-password");
-
-    if (!alumni) return res.status(404).json({ message: "Alumni not found" });
-
-    res.json({ message: "Admin privileges granted successfully", alumni });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
