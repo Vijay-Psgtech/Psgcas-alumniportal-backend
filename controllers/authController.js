@@ -1,4 +1,5 @@
 // backend/controllers/authController.js
+const User = require("../models/Users");
 const Alumni = require("../models/Alumni");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -18,12 +19,10 @@ const COOKIE_OPTIONS = {
 };
 
 // ─── Helper: generate JWT ────────────────────────────────────────
-const generateToken = (alumni) =>
-  jwt.sign(
-    { id: alumni._id, email: alumni.email, isAdmin: alumni.isAdmin },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" },
-  );
+const generateToken = (payload) =>
+  jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: "1d",
+  });
 
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
@@ -189,66 +188,212 @@ exports.register = async (req, res) => {
 // @route   POST /api/auth/login
 // ✅ FIX: Returns 401 (not 403) for unapproved so frontend error handler works uniformly.
 //         Also returns isApproved flag so frontend can show correct message.
+// exports.login = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     if (!email || !password) {
+//       return res.status(400).json({ message: "Email and password required" });
+//     }
+
+//     const alumni = await Alumni.findOne({ email: email.toLowerCase() }).select(
+//       "+password",
+//     );
+
+//     if (!alumni) {
+//       return res.status(401).json({ message: "Invalid email or password" });
+//     }
+
+//     const isPasswordValid = await bcrypt.compare(password, alumni.password);
+//     if (!isPasswordValid) {
+//       return res.status(401).json({ message: "Invalid email or password" });
+//     }
+
+//     // ✅ FIX: Don't block login for unapproved — return isApproved:false
+//     // Frontend will redirect to /alumni/register (pending page) via ProtectedRoute
+//     const token = generateToken(alumni);
+
+//     // ── Set JWT as HttpOnly cookie ───────────────────────────────
+//     res.cookie("token", token, COOKIE_OPTIONS);
+
+//     res.json({
+//       message: alumni.isApproved
+//         ? "Login successful"
+//         : "Login successful. Awaiting admin approval.",
+//       alumni: {
+//         _id: alumni._id,
+//         firstName: alumni.firstName,
+//         lastName: alumni.lastName,
+//         email: alumni.email,
+//         isApproved: alumni.isApproved,
+//         isAdmin: alumni.isAdmin,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Login Error:", error);
+//     res.status(500).json({ message: "Login failed", error: error.message });
+//   }
+// };
+
+
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password required" });
+      return res.status(400).json({
+        message: "Email and password required",
+      });
     }
 
-    const alumni = await Alumni.findOne({ email: email.toLowerCase() }).select(
-      "+password",
-    );
+    // ===============================
+    // 1. Check Admin Users First
+    // ===============================
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+    }).select("+password");
+
+    if (user) {
+      const isPasswordValid = await bcrypt.compare(
+        password,
+        user.password
+      );
+
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          message: "Invalid email or password",
+        });
+      }
+
+      const token = generateToken({
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        type: "user",
+      });
+
+      res.cookie("token", token, COOKIE_OPTIONS);
+
+      return res.json({
+        message: "Admin login successful",
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          isAdmin: true,
+          isApproved: user.isActive,
+        },
+      });
+    }
+
+    // ===============================
+    // 2. Check Alumni
+    // ===============================
+    const alumni = await Alumni.findOne({
+      email: email.toLowerCase(),
+    }).select("+password");
 
     if (!alumni) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, alumni.password);
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      alumni.password
+    );
+
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
     }
 
-    // ✅ FIX: Don't block login for unapproved — return isApproved:false
-    // Frontend will redirect to /alumni/register (pending page) via ProtectedRoute
-    const token = generateToken(alumni);
+    const token = generateToken({
+      id: alumni._id,
+      email: alumni.email,
+      role: "alumni",
+      type: "alumni",
+    });
 
-    // ── Set JWT as HttpOnly cookie ───────────────────────────────
     res.cookie("token", token, COOKIE_OPTIONS);
 
     res.json({
       message: alumni.isApproved
         ? "Login successful"
         : "Login successful. Awaiting admin approval.",
-      alumni: {
+
+      user: {
         _id: alumni._id,
         firstName: alumni.firstName,
         lastName: alumni.lastName,
         email: alumni.email,
+        role: "alumni",
         isApproved: alumni.isApproved,
-        isAdmin: alumni.isAdmin,
+        isAdmin: false,
       },
     });
+
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({ message: "Login failed", error: error.message });
+
+    res.status(500).json({
+      message: "Login failed",
+      error: error.message,
+    });
   }
 };
 
 // @route   GET /api/auth/profile
+// exports.getProfile = async (req, res) => {
+//   try {
+//     const alumni = await Alumni.findById(req.user.id).select("-password");
+
+//     if (!alumni) {
+//       return res.status(404).json({ message: "Alumni not found" });
+//     }
+
+//     res.json({ message: "Profile retrieved successfully", alumni });
+//   } catch (error) {
+//     console.error("Get Profile Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 exports.getProfile = async (req, res) => {
   try {
-    const alumni = await Alumni.findById(req.user.id).select("-password");
+    const { id, type, role } = req.user;
 
-    if (!alumni) {
-      return res.status(404).json({ message: "Alumni not found" });
+    let profile;
+
+    if (type === "user") {
+      profile = await User.findById(id).select("-password");
+      return res.json({
+        success: true,
+        user: {
+          ...profile.toObject(),
+          isAdmin: true,
+          isApproved: profile.isActive,
+        },
+      });
+    } else {
+      profile = await Alumni.findById(id).select("-password");
+      return res.json({
+        success: true,
+        user: {
+          ...profile.toObject(),
+          role: "alumni",
+          isAdmin: false,
+        },
+      });
     }
-
-    res.json({ message: "Profile retrieved successfully", alumni });
   } catch (error) {
-    console.error("Get Profile Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({
+      message: "Failed to fetch profile",
+    });
   }
 };
 
