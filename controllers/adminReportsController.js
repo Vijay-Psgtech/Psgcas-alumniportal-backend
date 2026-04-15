@@ -41,3 +41,40 @@ exports.getAlumniByYear = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+// get Alumni count by department
+exports.getAlumniByDepartment = async (req, res) => {
+  try {
+    const countByDepartment = await Alumni.aggregate([
+      {
+        $project: {
+          department: "$department",
+        },
+      },
+      {
+        $group: {
+          _id: "$department",
+          count: { $sum: 1 },
+        },
+      },
+      { 
+        $project: {
+          _id: 0,
+          department: "$_id",
+          count: 1,
+        },
+      },
+      { $sort: { department: 1 } },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        countByDepartment,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching alumni count by department:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
