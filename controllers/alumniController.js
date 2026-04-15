@@ -313,6 +313,7 @@ exports.getAlumniBatchWise = async (req, res) => {
     const {
       batchYear,
       department,
+      occupation,
       search,
       page = 1,
       limit = 12,
@@ -329,6 +330,11 @@ exports.getAlumniBatchWise = async (req, res) => {
     // Department filter
     if (department) {
       query.department = department;
+    }
+
+    // Occupation filter
+    if (occupation) {
+      query.occupation = occupation;
     }
 
     // Search filter
