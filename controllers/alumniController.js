@@ -250,11 +250,16 @@ exports.updateAlumniProfile = async (req, res) => {
 // @access  Public
 exports.getMapData = async (req, res) => {
   try {
+    const { department } = req.query;
+    let filter = { isApproved: true };
+
+    if (department) filter.department = department;
+
     const alumni = await Alumni.find({
-      isApproved: true,
-      country: { $exists: true },
-      city: { $exists: true },
-    })
+      ...filter,
+      country: { $exists: true, $ne: "" },
+      city: { $exists: true, $ne: "" },
+      })
       .select("-password")
       .lean();
 
