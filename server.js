@@ -91,6 +91,9 @@ app.use("/api/notifications", require("./routes/notifications"));
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
 
+// User management (Admin only)
+app.use("/api/users", require("./routes/users"));
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
