@@ -78,14 +78,6 @@ exports.updateAlumniProfile = async (req, res) => {
       "gender",
       "occupation",
 
-      "department",
-      "rollNumber",
-      "degree",
-      "programmeType",
-      "studyStartYear",
-      "studyEndYear",
-      "batchYear",
-
       "currentCompany",
       "jobTitle",
       "industry",
@@ -200,8 +192,15 @@ exports.updateAlumniProfile = async (req, res) => {
     }
 
     // ── 5. Profile photo (single, field name: "profileImage") ─────────────
-    if (req.files && req.files.profileImage && req.files.profileImage.length > 0) {
-      updateData.profileImage = req.files.profileImage[0].path.replace(/\\/g, "/");
+    if (
+      req.files &&
+      req.files.profileImage &&
+      req.files.profileImage.length > 0
+    ) {
+      updateData.profileImage = req.files.profileImage[0].path.replace(
+        /\\/g,
+        "/",
+      );
     }
 
     // ── 6. Document files (multiple, each under its own field name) ────────
@@ -303,7 +302,7 @@ exports.getMapData = async (req, res) => {
 };
 
 // Get /api/alumni/alumni-batchYear
-// Alumni batchwise 
+// Alumni batchwise
 exports.getAlumniBatchWise = async (req, res) => {
   try {
     const {
@@ -364,7 +363,6 @@ exports.getAlumniBatchWise = async (req, res) => {
   }
 };
 
-
 exports.getAlumniGroupedByBatch = async (req, res) => {
   try {
     const alumni = await Alumni.aggregate([
@@ -401,13 +399,13 @@ exports.batches = async (req, res) => {
         count: { $sum: 1 },
       },
     },
-    { $sort: { _id: -1 } }, 
-  ])
+    { $sort: { _id: -1 } },
+  ]);
   res.json({
     batches: batches.sort((a, b) => b - a),
-    batchesWithCounts
+    batchesWithCounts,
   });
-}
+};
 
 // Get alumni totalcount, batchwise count, departmentwise count, etc. for stats page
 exports.getAlumniStats = async (req, res) => {
@@ -416,7 +414,7 @@ exports.getAlumniStats = async (req, res) => {
     const batchStats = await Alumni.aggregate([
       { $match: { isApproved: true } },
       {
-        $group: { 
+        $group: {
           _id: "$batchYear",
           count: { $sum: 1 },
         },
@@ -424,7 +422,7 @@ exports.getAlumniStats = async (req, res) => {
       { $sort: { _id: -1 } },
     ]);
 
-    const departmentStats = await Alumni.aggregate([  
+    const departmentStats = await Alumni.aggregate([
       { $match: { isApproved: true } },
       {
         $group: {
@@ -458,7 +456,6 @@ exports.getAlumniStats = async (req, res) => {
       { $limit: 10 },
     ]);
 
-
     res.json({
       success: true,
       data: {
@@ -468,7 +465,6 @@ exports.getAlumniStats = async (req, res) => {
         countryStats: countryStats.length,
         topCities: topCities.length,
       },
-
     });
   } catch (error) {
     console.error("Get Alumni Stats Error:", error);

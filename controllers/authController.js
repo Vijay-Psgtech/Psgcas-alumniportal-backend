@@ -105,7 +105,7 @@ exports.register = async (req, res) => {
     };
 
     const newAlumni = await Alumni.create({
-      alumniId : req.alumniId,      
+      alumniId: req.alumniId,
       firstName,
       lastName,
       email: email.toLowerCase(),
@@ -201,10 +201,7 @@ exports.login = async (req, res) => {
     }).select("+password");
 
     if (user) {
-      const isPasswordValid = await bcrypt.compare(
-        password,
-        user.password
-      );
+      const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
         return res.status(401).json({
@@ -248,10 +245,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      alumni.password
-    );
+    const isPasswordValid = await bcrypt.compare(password, alumni.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -283,7 +277,6 @@ exports.login = async (req, res) => {
         isAdmin: false,
       },
     });
-
   } catch (error) {
     console.error("Login Error:", error);
 
@@ -401,8 +394,8 @@ exports.forgotPassword = async (req, res) => {
         <p>Your OTP is:</p>
         <h1>${otp}</h1>
         <p>This OTP is valid for 5 minutes.</p>
-      `
-    })
+      `,
+    });
 
     res.json({ message: `OTP sent to ${email}. Check your inbox.` });
   } catch (error) {
