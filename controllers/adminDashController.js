@@ -6,7 +6,15 @@ const Album = require("../models/Album");
 // GET /api/admin/dashboard/alumni/all
 exports.getAllAlumniForAdmin = async (req, res) => {
   try {
-    const { status, search, department, batchYear, sortBy } = req.query;
+    const { 
+      status, 
+      search, 
+      department, 
+      batchYear, 
+      sortBy, 
+      page = 1, 
+      limit = 20, 
+    } = req.query;
 
     let filter = {};
     if (status === "pending") filter.isApproved = false;
@@ -27,14 +35,27 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     else if (sortBy === "email") sortOptions = { email: 1 };
     else if (sortBy === "year") sortOptions = { batchYear: -1 };
 
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const alumni = await Alumni.find(filter)
       .select("-password")
-      .sort(sortOptions);
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const totalAlumni = await Alumni.countDocuments(filter);
+    const totalApproved = await Alumni.countDocuments({ ...filter, isApproved: true });
+    const totalPending = await Alumni.countDocuments({ ...filter, isApproved: false });
 
     res.json({
       message: "Alumni retrieved successfully",
       count: alumni.length,
       alumni,
+      totalAlumni,
+      totalApproved,
+      totalPending,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil((await Alumni.countDocuments(filter)) / parseInt(limit)),
     });
   } catch (error) {
     console.error("Get All Alumni Error:", error);
