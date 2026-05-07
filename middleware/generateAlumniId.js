@@ -1,10 +1,14 @@
-const Alumni = require("../models/Alumni");
+const Counter = require("../models/Counter");
 
 exports.generateAlumniId = async (req, res, next) => {
   try {
-    const count = await Alumni.countDocuments();
+    const counter = await Counter.findOneAndUpdate(
+      { name: "alumniId" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true },
+    );
 
-    const alumniId = `PSGCAS-ALU-${String(count + 1).padStart(6, "0")}`;
+    const alumniId = `PSGCAS-ALU-${String(counter.seq).padStart(6, "0")}`;
 
     req.alumniId = alumniId;
 
