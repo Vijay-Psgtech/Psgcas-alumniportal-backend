@@ -20,7 +20,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
     if (department) filter.department = department;
-    if (batchYear) filter.batchYear = batchYear;
+    if (batchYear) filter.batchYear = batchYear === 'null' ? null : batchYear;
     if (search) {
       filter.$or = [
         { firstName: { $regex: search, $options: "i" } },
