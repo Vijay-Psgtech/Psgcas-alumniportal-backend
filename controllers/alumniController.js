@@ -12,7 +12,7 @@ exports.getAllAlumni = async (req, res) => {
     let filter = { isApproved: true };
 
     if (department) filter.department = department;
-    if (batchYear) filter.batchYear = batchYear;
+    if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
     if (country) filter.country = country;
     if (city) filter.city = city;
 
@@ -324,7 +324,7 @@ exports.getAlumniBatchWise = async (req, res) => {
 
     // Batch filter
     if (batchYear) {
-      query.batchYear = batchYear;
+      query.batchYear = batchYear === "null" ? null : batchYear;
     }
 
     // Department filter
@@ -495,7 +495,6 @@ exports.getAlumniStats = async (req, res) => {
     ]);
 
     const departmentStats = await Alumni.aggregate([
-      { $match: { isApproved: true, ...filter } },
       {
         $group: {
           _id: "$department",
