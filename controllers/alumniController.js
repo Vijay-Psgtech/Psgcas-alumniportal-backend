@@ -12,7 +12,7 @@ exports.getAllAlumni = async (req, res) => {
     let filter = { isApproved: true };
 
     if (department) filter.department = department;
-    if (batchYear) filter.batchYear = parseInt(batchYear);
+    if (batchYear) filter.batchYear = batchYear;
     if (country) filter.country = country;
     if (city) filter.city = city;
 
@@ -401,28 +401,76 @@ exports.getAlumniGroupedByBatch = async (req, res) => {
 };
 
 exports.batches = async (req, res) => {
-  // Get distinct batch years with department wise counts
+  try {
+    const { department } = req.query;
 
-  const { department } = req.query;
-  let filter = { isApproved: true };
+    let filter = {
+      isApproved: true,
+    };
 
-  if (department) filter.department = department;
+    if (department) {
+      filter.department = department;
+    }
 
-  const batches = await Alumni.distinct("batchYear", filter);
-  const batchesWithCounts = await Alumni.aggregate([
-    { $match: { batchYear: { $in: batches }, ...filter } },
-    {
-      $group: {
-        _id: "$batchYear",
-        count: { $sum: 1 },
+    // Fetch valid batch years only
+    const batches = await Alumni.distinct("batchYear", {
+      ...filter,
+    });
+
+    // fetch field missing / null / empty as "Unknown" batch with count and departments represented in that batch
+    const unknownBatchCount = await Alumni.countDocuments({
+      ...filter,
+      $or: [
+        { batchYear: null },
+        { batchYear: "" },
+        { batchYear: { $exists: false } },
+      ],
+    });
+
+    const batchesWithCounts = await Alumni.aggregate([
+      {
+        $match: filter,
       },
-    },
-    { $sort: { _id: -1 } },
-  ]);
-  res.json({
-    batches: batches.sort((a, b) => b - a),
-    batchesWithCounts,
-  });
+      {
+        $group: {
+          _id: {
+            $cond: [
+              {
+                $or: [
+                  { $eq: ["$batchYear", null] },
+                  { $eq: ["$batchYear", ""] },
+                  { $not: ["$batchYear"] }, // field missing
+                ],
+              },
+              "Unknown",
+              "$batchYear",
+            ],
+          },
+          count: { $sum: 1 },
+          departments: { $addToSet: "$department" },
+        },
+      },
+      {
+        $sort: { _id: -1 },
+      },
+    ]);
+
+    // Merge "Unknown" into batches array if there are records with missing batchYear
+    if (unknownBatchCount > 0) {
+      batches.push("Unknown");
+    }
+
+    res.status(200).json({
+      batches: batches.sort((a, b) => b - a),
+      batchesWithCounts,
+      unknownBatchCount,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to fetch batch data",
+      error: error.message,
+    });
+  }
 };
 
 // Get alumni totalcount, batchwise count, departmentwise count, etc. for stats page
@@ -431,7 +479,10 @@ exports.getAlumniStats = async (req, res) => {
     const { department } = req.query;
     let filter = { isApproved: true };
     if (department) filter.department = department;
-    const totalAlumni = await Alumni.countDocuments({ isApproved: true, ...filter });
+    const totalAlumni = await Alumni.countDocuments({
+      isApproved: true,
+      ...filter,
+    });
     const batchStats = await Alumni.aggregate([
       { $match: { isApproved: true, ...filter } },
       {
