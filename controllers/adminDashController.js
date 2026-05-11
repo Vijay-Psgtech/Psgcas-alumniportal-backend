@@ -20,7 +20,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
     if (department) filter.department = department;
-    if (batchYear) filter.batchYear = parseInt(batchYear);
+    if (batchYear) filter.batchYear = batchYear;
     if (search) {
       filter.$or = [
         { firstName: { $regex: search, $options: "i" } },
@@ -36,6 +36,8 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     else if (sortBy === "year") sortOptions = { batchYear: -1 };
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    console.log("Filter:", filter);
 
     const alumni = await Alumni.find(filter)
       .select("-password")
