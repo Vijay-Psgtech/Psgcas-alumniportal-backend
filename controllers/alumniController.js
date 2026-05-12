@@ -542,3 +542,23 @@ exports.getAlumniStats = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// fetching distinct department & batch from alumni modal
+
+exports.getDistinctDeptandBatch = async (req, res) => {
+  try {
+    const departments = await Alumni.distinct("department").sort();
+    const batches = await Alumni.distinct("batchYear").sort();
+
+    res.json({
+      success: true,
+      data: {
+        departments,
+        batches
+      }
+    });
+  } catch (err) {
+    console.error("Get Disinct Deaprtment & batch Error:", err);
+    res.status(500).json({message: "Server error", err: err.message });
+  }
+}
