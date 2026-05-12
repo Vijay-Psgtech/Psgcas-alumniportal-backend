@@ -495,6 +495,7 @@ exports.getAlumniStats = async (req, res) => {
     ]);
 
     const departmentStats = await Alumni.aggregate([
+      { $match: { isApproved: true, ...filter } },
       {
         $group: {
           _id: "$department",
