@@ -9,7 +9,7 @@ exports.getAllAlumni = async (req, res) => {
     const { department, batchYear, country, city, search } = req.query;
     const totalCount = await Alumni.countDocuments();
     // Build filter
-    let filter = { isApproved: true };
+    let filter = { isApproved: true, role: "Alumni" };
 
     if (department) filter.department = department;
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
@@ -251,7 +251,7 @@ exports.updateAlumniProfile = async (req, res) => {
 exports.getMapData = async (req, res) => {
   try {
     const { department } = req.query;
-    let filter = { isApproved: true };
+    let filter = { isApproved: true, role: "Alumni" };
 
     if (department) filter.department = department;
 
@@ -320,7 +320,7 @@ exports.getAlumniBatchWise = async (req, res) => {
       sort = "desc",
     } = req.query;
 
-    const query = {};
+    let query = { role: "Alumni" };
 
     // Batch filter
     if (batchYear) {
@@ -406,6 +406,7 @@ exports.batches = async (req, res) => {
 
     let filter = {
       isApproved: true,
+      role: "Alumni"
     };
 
     if (department) {
@@ -477,7 +478,7 @@ exports.batches = async (req, res) => {
 exports.getAlumniStats = async (req, res) => {
   try {
     const { department } = req.query;
-    let filter = { isApproved: true };
+    let filter = { isApproved: true, role: "Alumni" };
     if (department) filter.department = department;
     const totalAlumni = await Alumni.countDocuments({
       isApproved: true,
