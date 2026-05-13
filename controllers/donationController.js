@@ -1,314 +1,539 @@
+// backend/controllers/donationController.js
 const Donation = require("../models/Donation");
-const authenticate = require("../middleware/authenticate");
+const crypto = require("crypto");
 
-// Fixed: Initialize Stripe only if STRIPE_SECRET_KEY exsits
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? require("stripe")(process.env.STRIPE_SECRET_KEY)
-  : null;
-
-// ✅ FIXED: Initialize Razorpay only if keys exist
-const Razorpay = require("razorpay");
-const razorpay =
-  process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
-    ? new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID,
-        key_secret: process.env.RAZORPAY_KEY_SECRET,
-      })
-    : null;
-
-// ─────────────────────────────────────────────────────────────
-// 1️⃣ CREATE DONATION + INITIATE PAYMENT
-// ─────────────────────────────────────────────────────────────
-// POST /api/donations
-// Public route - anyone can donate
-// If JWT token present in headers, auto-links donation to alumni account
-
+// ═════════════════════════════════════════════════════════════════════════
+// CREATE DONATION
+// ═════════════════════════════════════════════════════════════════════════
 exports.createDonations = async (req, res) => {
   try {
     const {
       donorName,
       donorEmail,
+      donorPhone,
+      donorCity,
+      donorState,
+      donorCountry,
       amount,
       currency,
       paymentMethod,
+      paymentGateway,
       message,
       isAnonymous,
+      alumniId,
     } = req.body;
 
-    // ✅ Validation
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ message: "Invalid amount" });
-    }
-
-    const minAmount = currency === "INR" ? 100 : 5;
-    if (amount < minAmount) {
+    // Validation
+    if (!donorName || !amount || !currency || !paymentMethod) {
       return res.status(400).json({
-        message: `Minimum donation is ${currency === "INR" ? "₹100" : "$5"}`,
+        success: false,
+        message: "Missing required fields: donorName, amount, currency, paymentMethod",
       });
     }
 
-    if (!isAnonymous && (!donorName || !donorEmail)) {
+    if (amount <= 0) {
       return res.status(400).json({
-        message: "Name and email required for non-anonymous donations",
+        success: false,
+        message: "Donation amount must be greater than 0",
       });
     }
 
-    // ✅ Get alumni ID from JWT token if available
-    let alumniId = null;
-    const token = req.headers.authorization?.split(" ")[1];
-    if (token) {
-      try {
-        const decoded = require("jsonwebtoken").verify(
-          token,
-          process.env.JWT_SECRET,
-        );
-        alumniId = decoded.id;
-      } catch (err) {
-        // Token invalid, continue as public donation
-      }
-    }
-
-    // ✅ Create donation record in database
+    // Create new donation
     const donation = new Donation({
-      donorName: isAnonymous ? "Anonymous" : donorName,
-      donorEmail: isAnonymous ? "" : donorEmail,
+      donorName: isAnonymous ? "Anonymous Donor" : donorName,
+      donorEmail: isAnonymous ? null : donorEmail,
+      donorPhone,
+      donorCity,
+      donorState,
+      donorCountry,
       amount,
       currency,
       paymentMethod,
+      paymentGateway: paymentGateway || "manual",
       message,
-      isAnonymous,
+      isAnonymous: isAnonymous || false,
       alumniId: alumniId || null,
-      status: "pending", // Payment not yet processed
-      transactionId: `TEMP-${Date.now()}`, // Temporary ID, will be updated after payment
+      status: paymentGateway ? "pending" : "pending",
+      transactionId: `TXN-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
     });
 
     await donation.save();
 
-    // ✅ Initialize payment based on currency and payment method
-    let paymentResponse = {};
+    console.log("✅ Donation created:", donation._id);
 
-    // Route to payment gateway based on currency and method
-    if (
-      currency === "INR" &&
-      paymentMethod !== "Cheque" &&
-      paymentMethod !== "Wire Transfer"
-    ) {
-      // Use Razorpay for INR (UPI, Net Banking, Card)
-      if (!razorpay) {
-        return res.status(500).json({
-          message:
-            "Razorpay is not configured. Please check your environment variables.",
-        });
-      }
-      paymentResponse = await initializeRazorpayPayment(donation, amount);
-    } else if (currency === "USD" && paymentMethod === "Card") {
-      // Use Stripe for USD cards
-      if (!stripe) {
-        return res.status(500).json({
-          message:
-            "Stripe is not configured. Please check your environment variables.",
-        });
-      }
-      paymentResponse = await initializeStripePayment(donation, amount);
-    } else if (
-      paymentMethod === "Cheque" ||
-      paymentMethod === "Wire Transfer"
-    ) {
-      // Manual payment methods
-      paymentResponse = {
-        status: "manual",
-        message: "Please send cheque/wire transfer to the provided details",
-      };
-    } else if (currency === "USD") {
-      // USD without specific method - use Stripe
-      if (!stripe) {
-        return res.status(500).json({
-          message:
-            "Stripe is not configured. Please check your environment variables.",
-        });
-      }
-      paymentResponse = await initializeStripePayment(donation, amount);
-    }
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      donation: {
-        _id: donation._id,
-        transactionId: donation.transactionId,
-        status: donation.status,
-      },
-      payment: paymentResponse,
+      message: "Donation created successfully",
+      donation,
     });
   } catch (error) {
-    console.error("❌ Donation creation error:", error);
-    res.status(500).json({
+    console.error("❌ Error creating donation:", error);
+    return res.status(500).json({
+      success: false,
       message: "Failed to create donation",
       error: error.message,
     });
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// 2️⃣ RAZORPAY PAYMENT GATEWAY
-// ─────────────────────────────────────────────────────────────
-async function initializeRazorpayPayment(donation, amountInINR) {
-  try {
-    if (!razorpay) {
-      throw new Error("Razorpay is not configured");
-    }
-    const amountInPaise = Math.round(amountInINR * 100); // convert to paise
-
-    const order = await razorpay.orders.create({
-      amount: amountInPaise,
-      currency: "INR",
-      receipt: donation._id.toString(),
-      notes: {
-        donorName: donation.donorName,
-        donorEmail: donation.donorEmail,
-        message: donation.message,
-      },
-    });
-
-    return {
-      gateway: "razorpay",
-      orderId: order.id,
-      amount: amountInINR,
-      currency: "INR",
-      keyId: process.env.RAZORPAY_KEY_ID,
-      name: "PSG Tech Alumni Foundation",
-      description: "Support PSG Tech - Donation",
-      prefill: {
-        name: donation.donorName,
-        email: donation.donorEmail,
-      },
-    };
-  } catch (error) {
-    console.error("❌ Razorpay error:", error);
-    throw new Error("Failed to initialize Razorpay payment");
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// 3️⃣ STRIPE PAYMENT GATEWAY
-// ─────────────────────────────────────────────────────────────
-async function initializeStripePayment(donation, amountInUSD) {
-  try {
-    if (!stripe) {
-      throw new Error("Stripe is not configured");
-    }
-
-    const amountInCents = Math.round(amountInUSD * 100); // Convert to cents
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "PSG Tech Alumni Foundation Donation",
-              description: `Support PSG Tech - ${donation.message || "General donation"}`,
-            },
-            unit_amount: amountInCents,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/donate/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/donate?cancelled=true`,
-      customer_email: donation.donorEmail,
-      metadata: {
-        donationId: donation._id.toString(),
-        donorName: donation.donorName,
-      },
-    });
-
-    return {
-      gateway: "stripe",
-      sessionId: session.id,
-      amount: amountInUSD,
-      currency: "USD",
-      clientSecret: session.client_secret,
-      url: session.url,
-    };
-  } catch (error) {
-    console.error("❌ Stripe error:", error);
-    throw new Error("Failed to initialize Stripe payment");
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// 4️⃣ VERIFY RAZORPAY PAYMENT
-// ─────────────────────────────────────────────────────────────
-// POST /api/donations/verify-razorpay
+// ═════════════════════════════════════════════════════════════════════════
+// VERIFY RAZORPAY PAYMENT
+// ═════════════════════════════════════════════════════════════════════════
 exports.verifyRazorPay = async (req, res) => {
   try {
-    if (!razorpay) {
-      return res.status(500).json({ message: "Razorpay is not configured" });
-    }
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
-      req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    // ✅ Verify signature
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const crypto = require("crypto");
-    const generated_signature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest("hex");
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing Razorpay verification details",
+      });
+    }
+
+    // Verify signature (you'll need your Razorpay key secret)
+    const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "");
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const generated_signature = hmac.digest("hex");
 
     if (generated_signature !== razorpay_signature) {
-      return res.status(400).json({ message: "Invalid payment signature" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Razorpay signature",
+      });
     }
 
-    // ✅ Update donation status
-    const donation = await Donation.findById(req.body.donationId);
+    // Update donation status
+    const donation = await Donation.findOneAndUpdate(
+      { transactionId: razorpay_order_id },
+      {
+        status: "completed",
+        transactionId: razorpay_payment_id,
+        completedAt: new Date(),
+      },
+      { new: true }
+    );
+
     if (!donation) {
-      return res.status(404).json({ message: "Donation not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Donation not found",
+      });
     }
 
-    donation.status = "completed";
-    donation.transactionId = razorpay_payment_id;
-    donation.paymentGateway = "razorpay";
-    donation.completedAt = new Date();
-    await donation.save();
+    console.log("✅ Razorpay payment verified:", razorpay_payment_id);
 
-    // ✅ Send confirmation email
-    await sendDonationConfirmationEmail(donation);
-
-    res.json({
+    return res.json({
       success: true,
       message: "Payment verified successfully",
       donation,
     });
   } catch (error) {
-    console.error("❌ Razorpay verification error:", error);
-    res
-      .status(500)
-      .json({ message: "Verification failed", error: error.message });
+    console.error("❌ Error verifying Razorpay payment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify payment",
+      error: error.message,
+    });
   }
 };
 
-//─────────────────────────────────────────────────────────────
-// Get All donations
-// ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════
+// GET ALL DONATIONS (ADMIN ONLY)
+// ═════════════════════════════════════════════════════════════════════════
 exports.getAllDonations = async (req, res) => {
   try {
-    const donations = await Donation.find().sort({ createdAt: -1 });
+    const donations = await Donation.find().populate("alumniId").sort({ createdAt: -1 });
 
     const stats = {
       total: donations.length,
       completed: donations.filter((d) => d.status === "completed").length,
       pending: donations.filter((d) => d.status === "pending").length,
-      totalAmount: donations
-        .filter((d) => d.status === "completed")
-        .reduce((sum, d) => sum + d.amount, 0),
+      failed: donations.filter((d) => d.status === "failed").length,
+      cancelled: donations.filter((d) => d.status === "cancelled").length,
+      totalAmount: donations.reduce((sum, d) => sum + d.amount, 0),
+      averageAmount: donations.length > 0 ? Math.round(donations.reduce((sum, d) => sum + d.amount, 0) / donations.length) : 0,
     };
 
-    res.json({ donations, stats });
+    console.log("✅ Fetched all donations");
+
+    return res.json({
+      success: true,
+      donations,
+      stats,
+    });
   } catch (error) {
-    console.error("❌ Admin get donations error:", error);
-    res.status(500).json({ message: "Failed to fetch donations" });
+    console.error("❌ Error fetching donations:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch donations",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// GET DONATION HISTORY WITH FILTERS & PAGINATION
+// ═════════════════════════════════════════════════════════════════════════
+exports.getDonationHistory = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      status = "all",
+      currency = "all",
+      paymentMethod = "all",
+      donorType = "all",
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      startDate = "",
+      endDate = "",
+      minAmount = "",
+      maxAmount = "",
+    } = req.query;
+
+    // Build filter object
+    const filter = {};
+
+    if (status !== "all") {
+      filter.status = status;
+    }
+
+    if (currency !== "all") {
+      filter.currency = currency;
+    }
+
+    if (paymentMethod !== "all") {
+      filter.paymentMethod = paymentMethod;
+    }
+
+    if (donorType === "anonymous") {
+      filter.isAnonymous = true;
+    } else if (donorType === "individual") {
+      filter.isAnonymous = false;
+    }
+
+    // Search filter (name, email, transaction ID)
+    if (search) {
+      filter.$or = [
+        { donorName: new RegExp(search, "i") },
+        { donorEmail: new RegExp(search, "i") },
+        { transactionId: new RegExp(search, "i") },
+      ];
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    // Amount range filter
+    if (minAmount || maxAmount) {
+      filter.amount = {};
+      if (minAmount) {
+        filter.amount.$gte = parseFloat(minAmount);
+      }
+      if (maxAmount) {
+        filter.amount.$lte = parseFloat(maxAmount);
+      }
+    }
+
+    // Sorting
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Execute query with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const donations = await Donation.find(filter)
+      .populate("alumniId")
+      .sort(sortObj)
+      .limit(parseInt(limit))
+      .skip(skip);
+
+    const total = await Donation.countDocuments(filter);
+    const pages = Math.ceil(total / parseInt(limit));
+
+    // Calculate stats
+    const allDonations = await Donation.find(filter);
+    const stats = {
+      total: allDonations.length,
+      completed: allDonations.filter((d) => d.status === "completed").length,
+      pending: allDonations.filter((d) => d.status === "pending").length,
+      failed: allDonations.filter((d) => d.status === "failed").length,
+      cancelled: allDonations.filter((d) => d.status === "cancelled").length,
+      flagged: allDonations.filter((d) => d.adminFlagged).length,
+      totalAmount: allDonations.reduce((sum, d) => sum + d.amount, 0),
+      averageAmount: allDonations.length > 0 ? Math.round(allDonations.reduce((sum, d) => sum + d.amount, 0) / allDonations.length) : 0,
+    };
+
+    console.log(`✅ Fetched donation history - Page ${page}, Total: ${total}`);
+
+    return res.json({
+      success: true,
+      donations,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages,
+      },
+      stats,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching donation history:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch donation history",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// GET DONATION STATS
+// ═════════════════════════════════════════════════════════════════════════
+exports.getDonationStats = async (req, res) => {
+  try {
+    const donations = await Donation.find();
+
+    const stats = {
+      total: donations.length,
+      completed: donations.filter((d) => d.status === "completed").length,
+      pending: donations.filter((d) => d.status === "pending").length,
+      failed: donations.filter((d) => d.status === "failed").length,
+      cancelled: donations.filter((d) => d.status === "cancelled").length,
+      flagged: donations.filter((d) => d.adminFlagged).length,
+      totalAmount: donations.reduce((sum, d) => sum + d.amount, 0),
+      averageAmount: donations.length > 0 ? Math.round(donations.reduce((sum, d) => sum + d.amount, 0) / donations.length) : 0,
+      byPaymentMethod: {
+        upi: donations.filter((d) => d.paymentMethod === "UPI").length,
+        netbanking: donations.filter((d) => d.paymentMethod === "Net Banking").length,
+        card: donations.filter((d) => d.paymentMethod === "Card").length,
+        cheque: donations.filter((d) => d.paymentMethod === "Cheque").length,
+        wiretransfer: donations.filter((d) => d.paymentMethod === "Wire Transfer").length,
+      },
+      byCurrency: {
+        inr: donations.filter((d) => d.currency === "INR").length,
+        usd: donations.filter((d) => d.currency === "USD").length,
+      },
+    };
+
+    console.log("✅ Fetched donation stats");
+
+    return res.json({
+      success: true,
+      stats,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching stats:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch stats",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// GET DONATION BY ID
+// ═════════════════════════════════════════════════════════════════════════
+exports.getDonationById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const donation = await Donation.findById(id).populate("alumniId");
+
+    if (!donation) {
+      return res.status(404).json({
+        success: false,
+        message: "Donation not found",
+      });
+    }
+
+    console.log("✅ Fetched donation by ID:", id);
+
+    return res.json({
+      success: true,
+      donation,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching donation:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch donation",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// UPDATE DONATION (ADMIN)
+// ═════════════════════════════════════════════════════════════════════════
+exports.updateDonation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNote, status, adminFlagged, flaggedReason } = req.body;
+
+    const donation = await Donation.findByIdAndUpdate(
+      id,
+      {
+        ...(adminNote !== undefined && { adminNote }),
+        ...(status !== undefined && { status, completedAt: status === "completed" ? new Date() : null }),
+        ...(adminFlagged !== undefined && { adminFlagged, flaggedReason: adminFlagged ? flaggedReason : "" }),
+      },
+      { new: true }
+    ).populate("alumniId");
+
+    if (!donation) {
+      return res.status(404).json({
+        success: false,
+        message: "Donation not found",
+      });
+    }
+
+    console.log("✅ Donation updated:", id);
+
+    return res.json({
+      success: true,
+      message: "Donation updated successfully",
+      donation,
+    });
+  } catch (error) {
+    console.error("❌ Error updating donation:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update donation",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// DELETE DONATION (ADMIN)
+// ═════════════════════════════════════════════════════════════════════════
+exports.deleteDonation = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const donation = await Donation.findByIdAndDelete(id);
+
+    if (!donation) {
+      return res.status(404).json({
+        success: false,
+        message: "Donation not found",
+      });
+    }
+
+    console.log("✅ Donation deleted:", id);
+
+    return res.json({
+      success: true,
+      message: "Donation deleted successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error deleting donation:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete donation",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// UPDATE DONATION FLAG STATUS
+// ═════════════════════════════════════════════════════════════════════════
+exports.flagDonation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminFlagged, flaggedReason } = req.body;
+
+    const donation = await Donation.findByIdAndUpdate(
+      id,
+      {
+        adminFlagged,
+        flaggedReason: adminFlagged ? flaggedReason : "",
+        flaggedAt: adminFlagged ? new Date() : null,
+      },
+      { new: true }
+    ).populate("alumniId");
+
+    if (!donation) {
+      return res.status(404).json({
+        success: false,
+        message: "Donation not found",
+      });
+    }
+
+    console.log(`✅ Donation ${adminFlagged ? "flagged" : "unflagged"}:`, id);
+
+    return res.json({
+      success: true,
+      message: `Donation ${adminFlagged ? "flagged" : "unflagged"} successfully`,
+      donation,
+    });
+  } catch (error) {
+    console.error("❌ Error updating flag status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update flag status",
+      error: error.message,
+    });
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// UPDATE DONATION STATUS
+// ═════════════════════════════════════════════════════════════════════════
+exports.updateDonationStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!["pending", "completed", "failed", "cancelled"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status value",
+      });
+    }
+
+    const donation = await Donation.findByIdAndUpdate(
+      id,
+      {
+        status,
+        completedAt: status === "completed" ? new Date() : null,
+      },
+      { new: true }
+    ).populate("alumniId");
+
+    if (!donation) {
+      return res.status(404).json({
+        success: false,
+        message: "Donation not found",
+      });
+    }
+
+    console.log("✅ Donation status updated:", id, status);
+
+    return res.json({
+      success: true,
+      message: "Donation status updated successfully",
+      donation,
+    });
+  } catch (error) {
+    console.error("❌ Error updating status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update status",
+      error: error.message,
+    });
   }
 };
