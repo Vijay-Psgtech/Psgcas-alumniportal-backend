@@ -16,7 +16,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    let filter = {};
+    let filter = { role: "Alumni" };
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
     if (department) filter.department = department;
@@ -83,9 +83,9 @@ exports.getDashboardStats = async (req, res) => {
       totalEvents,
       albumsCount,
     ] = await Promise.all([
-      Alumni.countDocuments(),
-      Alumni.countDocuments({ isApproved: true }),
-      Alumni.countDocuments({ isApproved: false }),
+      Alumni.countDocuments({ role: "Alumni" }),
+      Alumni.countDocuments({ isApproved: true, role: "Alumni" }),
+      Alumni.countDocuments({ isApproved: false, role: "Alumni" }),
       Donation.find({ status: "completed" }),
       Donation.countDocuments({ status: "pending" }),
       Event.countDocuments(),
