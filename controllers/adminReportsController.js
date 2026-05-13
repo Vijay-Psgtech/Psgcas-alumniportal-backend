@@ -3,9 +3,9 @@ const Event = require("../models/Events");
 
 exports.getAlumniByYear = async (req, res) => {
   try {
-    const totalCount = await Alumni.countDocuments({ role: "Alumni" });
+    const totalCount = await Alumni.countDocuments({ role: "Alumni", batchYear: { $exists: true } });
     const countByYear = await Alumni.aggregate([
-      { $match: { role: "Alumni" }},
+      { $match: { role: "Alumni", batchYear: { $exists: true } }},
       {
         $project: {
           year: "$batchYear",
@@ -27,7 +27,7 @@ exports.getAlumniByYear = async (req, res) => {
       { $sort: { year: 1 } },
     ]);
 
-    const allAlumni = await Alumni.find({ role: "Alumni" }).sort({ createdAt: -1 }).limit(10);
+    const allAlumni = await Alumni.find({ role: "Alumni", batchYear: { $exists: true } }).sort({ createdAt: -1 }).limit(10);
 
     res.status(200).json({
       success: true,
@@ -47,7 +47,7 @@ exports.getAlumniByYear = async (req, res) => {
 exports.getAlumniByDepartment = async (req, res) => {
   try {
     const countByDepartment = await Alumni.aggregate([
-      { $match: { role: "Alumni" } },
+      { $match: { role: "Alumni", batchYear: { $exists: true } } },
       {
         $project: {
           department: "$department",
