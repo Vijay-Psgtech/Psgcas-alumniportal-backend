@@ -161,6 +161,12 @@ const AlumniSchema = new mongoose.Schema(
 
     profileImage: { type: String },
 
+    role : {
+      type: String,
+      enum: ['Alumni', 'Faculty', 'Student', 'Admin'],
+      default: 'Alumni'
+    },
+
     // Timestamps
     createdAt: {
       type: Date,
