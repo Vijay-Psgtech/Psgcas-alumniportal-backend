@@ -9,7 +9,7 @@ exports.getAllAlumni = async (req, res) => {
     const { department, batchYear, country, city, search } = req.query;
     const totalCount = await Alumni.countDocuments();
     // Build filter
-    let filter = { isApproved: true, role: "Alumni" };
+    let filter = { role: "Alumni" };
 
     if (department) filter.department = department;
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
@@ -251,7 +251,7 @@ exports.updateAlumniProfile = async (req, res) => {
 exports.getMapData = async (req, res) => {
   try {
     const { department } = req.query;
-    let filter = { isApproved: true, role: "Alumni" };
+    let filter = { role: "Alumni" };
 
     if (department) filter.department = department;
 
@@ -405,7 +405,6 @@ exports.batches = async (req, res) => {
     const { department } = req.query;
 
     let filter = {
-      isApproved: true,
       role: "Alumni"
     };
 
@@ -478,14 +477,13 @@ exports.batches = async (req, res) => {
 exports.getAlumniStats = async (req, res) => {
   try {
     const { department } = req.query;
-    let filter = { isApproved: true, role: "Alumni" };
+    let filter = { role: "Alumni" };
     if (department) filter.department = department;
     const totalAlumni = await Alumni.countDocuments({
-      isApproved: true,
-      ...filter,
+            ...filter,
     });
     const batchStats = await Alumni.aggregate([
-      { $match: { isApproved: true, ...filter } },
+      { $match: { ...filter } },
       {
         $group: {
           _id: "$batchYear",
@@ -496,7 +494,7 @@ exports.getAlumniStats = async (req, res) => {
     ]);
 
     const departmentStats = await Alumni.aggregate([
-      { $match: { isApproved: true, ...filter } },
+      { $match: { ...filter } },
       {
         $group: {
           _id: "$department",
@@ -507,7 +505,7 @@ exports.getAlumniStats = async (req, res) => {
     ]);
 
     const countryStats = await Alumni.aggregate([
-      { $match: { isApproved: true, ...filter } },
+      { $match: { ...filter } },
       {
         $group: {
           _id: "$country",
@@ -518,7 +516,7 @@ exports.getAlumniStats = async (req, res) => {
     ]);
 
     const topCities = await Alumni.aggregate([
-      { $match: { isApproved: true, city: { $exists: true }, ...filter } },
+      { $match: { city: { $exists: true }, ...filter } },
       {
         $group: {
           _id: "$city",
