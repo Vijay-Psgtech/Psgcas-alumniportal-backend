@@ -12,11 +12,14 @@ const upload = require("../middleware/uploads");
 
 router.get("/", getAllNewsLetters);
 router.get("/:id", getNewsLetterById);
-router.post("/", upload.single("imageUrl"), createNewsLetter);
-router.put("/:id", upload.single("imageUrl"), updateNewsLetter);
+
+// ✅ FIXED v2: Using upload.any() for maximum compatibility
+// This accepts ANY file fields without needing to declare them all
+router.post("/", upload.any(), createNewsLetter);
+
+router.put("/:id", upload.any(), updateNewsLetter);
+
 router.delete("/:id", deleteNewsLetter);
 router.get("/category/:category", getNewsLettersByCategory);
 
 module.exports = router;
-
-    

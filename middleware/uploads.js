@@ -18,7 +18,6 @@ const storage = multer.diskStorage({
       folder += "others/";
     }
 
-    // create folder if not exsits
     fs.mkdirSync(folder, { recursive: true });
 
     cb(null, folder);
@@ -27,24 +26,39 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     const uniqueName =
       Date.now() + "-" + file.originalname.replace(/\s+/g, "-");
+
     cb(null, uniqueName);
   },
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/jpg"];
+  const allowedTypes = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/jpg",
+  ];
 
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only image files are allowed"), false);
+    cb(
+      new Error(
+        "Only PDF, JPG, JPEG, PNG and WEBP files are allowed"
+      ),
+      false
+    );
   }
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
 });
 
 module.exports = upload;
