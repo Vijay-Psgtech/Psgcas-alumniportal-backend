@@ -386,11 +386,11 @@ exports.forgotPassword = async (req, res) => {
     //console.log(`\n📧 OTP for ${email}: ${otp} (expires in 10 minutes)\n`);
 
     await transporter.sendMail({
-      from: `"PSG Alumni"<${process.env.EMAIL_USER}>`,
+      from: `"PSG ARTS Alumni Association"<${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Password Reset OTP",
+      subject: "Password Set OTP",
       html: `
-        <h2>Pasword Reset Request</h2>
+        <h2>Password Set Request</h2>
         <p>Your OTP is:</p>
         <h1>${otp}</h1>
         <p>This OTP is valid for 5 minutes.</p>
