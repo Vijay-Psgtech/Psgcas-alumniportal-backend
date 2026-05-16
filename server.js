@@ -96,6 +96,9 @@ app.use("/api/reports", require("./routes/adminReports"));
 // User management (Admin only)
 app.use("/api/users", require("./routes/users"));
 
+// Campaigns (Create, Read, Update, Delete) 
+app.use("/api/campaigns", require("./routes/campaigns"));
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
