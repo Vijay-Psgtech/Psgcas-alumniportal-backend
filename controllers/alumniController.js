@@ -78,6 +78,14 @@ exports.updateAlumniProfile = async (req, res) => {
       "gender",
       "occupation",
 
+      "rollNumber",
+      "department",
+      "programmeType",
+      "degree",
+      "batchYear",
+      "studyStartYear",
+      "studyEndYear",
+
       "currentCompany",
       "jobTitle",
       "industry",
