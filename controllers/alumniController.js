@@ -263,13 +263,40 @@ exports.getMapData = async (req, res) => {
 
     if (department) filter.department = department;
 
-    const alumni = await Alumni.find({
-      ...filter,
-      country: { $exists: true, $ne: "" },
-      city: { $exists: true, $ne: "" },
-    })
-      .select("-password")
-      .lean();
+    // const alumni = await Alumni.find({
+    //   ...filter,
+    //   country: { $exists: true, $ne: "" },
+    //   city: { $exists: true, $ne: "" },
+    // })
+    //   .select("-password")
+    //   .lean();
+
+    const alumni = await Alumni.aggregate([
+      { $match: {
+        ...filter,
+        country: { $exists: true, $ne: "" },
+        city: { $exists: true, $ne: "" },
+      } },
+      {
+        $project: {
+          alumniId: 1,
+          firstName: 1,
+          lastName: 1,
+          rollNumber: 1,
+          department: 1,
+          degree: 1,
+          batchYear: 1,
+          currentCompany: 1,
+          jobTitle: 1,
+          files: 1,
+          isApproved: 1,
+          location: 1,
+          fullAddress: 1,
+          country: 1,
+          city: 1,
+        },
+      },
+    ]);
 
     // Group by country
     const groupedByCountry = {};
