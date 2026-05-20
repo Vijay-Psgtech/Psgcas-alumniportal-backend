@@ -102,6 +102,13 @@ app.use("/api/campaigns", require("./routes/campaigns"));
 // Contact form
 app.use("/api/contact", require("./routes/contact"));
 
+// ✅ FIXED: Banners API - changed from "/api/banner" to "/api/banners"
+app.use("/api/banners", require("./routes/bannerRoutes"));
+
+// ✅ FIXED: Notification Scrolls (banner scroll notifications) - SEPARATE PATH
+// DO NOT use "/api/notifications" here - it's already used above!
+app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
