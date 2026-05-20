@@ -2,7 +2,7 @@ const Newsletter = require("../models/Newsletter");
 
 exports.getAllNewsLetters = async (req, res) => {
   try {
-    const newsletters = await Newsletter.find().sort( { _id: -1 } );
+    const newsletters = await Newsletter.find().sort( { date: -1 } );
     res.json({ success: true, data: newsletters });
   } catch (error) {
     console.error("Error fetching newsletters:", error);
