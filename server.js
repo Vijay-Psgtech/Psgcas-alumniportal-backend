@@ -99,6 +99,9 @@ app.use("/api/users", require("./routes/users"));
 // Campaigns (Create, Read, Update, Delete) 
 app.use("/api/campaigns", require("./routes/campaigns"));
 
+// Contact form
+app.use("/api/contact", require("./routes/contact"));
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
