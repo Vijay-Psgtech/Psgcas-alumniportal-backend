@@ -409,6 +409,13 @@ exports.getAlumniBatchWise = async (req, res) => {
 
     const total = await Alumni.countDocuments(query);
 
+    // fetch jobTitle and departement lists for filters on frontend from current batch results to optimize performance instead of fetching from entire collection
+    const [jobTitles, departments] = await Promise.all([
+      Alumni.distinct("jobTitle", { batchYear }),
+      Alumni.distinct("department", { batchYear }),
+    ]);
+    
+
     res.status(200).json({
       success: true,
       count: alumni.length,
@@ -416,6 +423,10 @@ exports.getAlumniBatchWise = async (req, res) => {
       page: Number(page),
       totalPages: Math.ceil(total / limit),
       alumni,
+      filters: {
+        jobTitles: jobTitles.filter(Boolean).sort(),
+        departments: departments.filter(Boolean).sort(),
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -597,17 +608,18 @@ exports.getAlumniStats = async (req, res) => {
 
 // fetching distinct department & batch from alumni modal
 
-exports.getDistinctDeptandBatch = async (req, res) => {
+exports.getAlumniFilters  = async (req, res) => {
   try {
-    const departments = await Alumni.distinct("department").sort();
-    const batches = await Alumni.distinct("batchYear").sort();
+    const [departments, batches] = await Promise.all([
+      Alumni.distinct("department"),
+      Alumni.distinct("batchYear"),
+    ]);
 
     res.json({
-      success: true,
-      data: {
-        departments,
-        batches,
-      },
+      departments: departments.filter(Boolean).sort(),
+      batches: batches
+        .filter(Boolean)
+        .sort((a, b) => String(b).localeCompare(String(a))),
     });
   } catch (err) {
     console.error("Get Disinct Deaprtment & batch Error:", err);
