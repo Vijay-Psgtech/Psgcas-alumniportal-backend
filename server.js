@@ -15,29 +15,32 @@ const allowedOrigins = [
   "http://localhost:5174",
   "http://localhost:5000",
   "https://alumnitestpsgcas.psginstitutions.in",
-  "https://alumni.psgcas.ac.in",
-  "https://www.alumni.psgcas.ac.in",
 ];
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    console.log("Origin:", origin);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log("Blocked by CORS:", origin);
-      callback(null, false);
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
-
+// For local development, allow all origins. In production, this should be restricted to the frontend domain(s).
+// app.use(
+//   cors({
+//     origin: true,
+//     credentials: true,
+//     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//   }),
+// );
 
 app.use(express.json());
 app.use(cookieParser());
@@ -51,9 +54,6 @@ app.get("/api/health", (_req, res) =>
 // ── Routes ───────────────────────────────────────────────────────
 // Auth: register, login, forgot-password, verify-otp, reset-password, profile
 app.use("/api/auth", require("./routes/auth"));
-
-// ✅ NEW: DEPARTMENTS API (Dynamic departments management)
-app.use("/api/departments", require("./routes/departments"));
 
 // Chapters must be mounted before /api/alumni, otherwise /api/alumni/:id catches /api/alumni/chapters
 app.use("/api/alumni/chapters", require("./routes/chapters"));
@@ -87,22 +87,6 @@ app.use("/api/notifications", require("./routes/notifications"));
 
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
-
-// User management (Admin only)
-app.use("/api/users", require("./routes/users"));
-
-// Campaigns (Create, Read, Update, Delete) 
-app.use("/api/campaigns", require("./routes/campaigns"));
-
-// Contact form
-app.use("/api/contact", require("./routes/contact"));
-
-// ✅ FIXED: Banners API - changed from "/api/banner" to "/api/banners"
-app.use("/api/banners", require("./routes/bannerRoutes"));
-
-// ✅ FIXED: Notification Scrolls (banner scroll notifications) - SEPARATE PATH
-// DO NOT use "/api/notifications" here - it's already used above!
-app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
 
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
