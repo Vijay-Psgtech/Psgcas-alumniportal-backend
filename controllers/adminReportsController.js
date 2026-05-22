@@ -27,7 +27,20 @@ exports.getAlumniByYear = async (req, res) => {
       { $sort: { year: 1 } },
     ]);
 
-    const allAlumni = await Alumni.find({ role: "Alumni", batchYear: { $exists: true } }).sort({ createdAt: -1 }).limit(10);
+    const allAlumni = await Alumni.aggregate([
+      { $match: { role: "Alumni", batchYear: { $exists: true } } },
+      { $project: {
+        firstName: 1,
+        lastName: 1,
+        email: 1,
+        batchYear: 1,
+        department: 1,
+        files: 1,
+        createdAt: 1,
+      }},
+      { $sort: { createdAt: -1 } },
+      { $limit: 10 },
+    ])
 
     res.status(200).json({
       success: true,
