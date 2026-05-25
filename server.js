@@ -85,8 +85,14 @@ app.use("/api/alumni/chapters", require("./routes/chapters"));
 // Notifications (alumni submit + admin approve/reject)
 app.use("/api/notifications", require("./routes/notifications"));
 
+// Departments route
+app.use("/api/departments", require("./routes/departments"));
+
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
+
+// User management (Admin only)
+app.use("/api/users", require("./routes/users"));
 
 // Campaigns routes for admin
 app.use("/api/campaigns", require("./routes/campaigns"));
