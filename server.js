@@ -88,6 +88,15 @@ app.use("/api/notifications", require("./routes/notifications"));
 // Reports routes for admin
 app.use("/api/reports", require("./routes/adminReports"));
 
+// Campaigns routes for admin
+app.use("/api/campaigns", require("./routes/campaigns"));
+
+// banner routes
+app.use("/api/banners", require("./routes/bannerRoutes"));
+
+// Notification scrolls routes
+app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
+
 // ── Error handler ────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
