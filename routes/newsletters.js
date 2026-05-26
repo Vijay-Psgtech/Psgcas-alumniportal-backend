@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
     getAllNewsLetters,
+    getRecentNewsLetters,
     getNewsLetterById,
     createNewsLetter,
     updateNewsLetter,
@@ -11,7 +12,10 @@ const {
 const upload = require("../middleware/uploads");
 
 router.get("/", getAllNewsLetters);
+router.get("/recent", getRecentNewsLetters);
+
 router.get("/:id", getNewsLetterById);
+
 
 // ✅ FIXED v2: Using upload.any() for maximum compatibility
 // This accepts ANY file fields without needing to declare them all

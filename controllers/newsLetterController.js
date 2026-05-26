@@ -12,6 +12,20 @@ exports.getAllNewsLetters = async (req, res) => {
   }
 };
 
+// Get Recent 3 newsletters for homepage
+exports.getRecentNewsLetters = async (req, res) => {
+  try {
+    const newsletters = await Newsletter.find().sort({ date: -1 }).limit(3);
+    res.json({ success: true, data: newsletters });
+  }
+    catch (error) { 
+    console.error("Error fetching recent newsletters:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch recent newsletters" });
+  }
+};
+
 exports.getNewsLetterById = async (req, res) => {
   try {
     const newsletter = await Newsletter.findById(req.params.id);
