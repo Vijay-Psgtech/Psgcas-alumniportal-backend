@@ -55,6 +55,9 @@ app.get("/api/health", (_req, res) =>
 // Auth: register, login, forgot-password, verify-otp, reset-password, profile
 app.use("/api/auth", require("./routes/auth"));
 
+// ✅ NEW: DEPARTMENTS API (Dynamic departments management)
+app.use("/api/departments", require("./routes/departments"));
+
 // Chapters must be mounted before /api/alumni, otherwise /api/alumni/:id catches /api/alumni/chapters
 app.use("/api/alumni/chapters", require("./routes/chapters"));
 
@@ -90,6 +93,9 @@ app.use("/api/reports", require("./routes/adminReports"));
 
 // Contact form 
 app.use("/api/contact", require("./routes/contact"));
+
+// User management (Admin only)
+app.use("/api/users", require("./routes/users"));
 
 
 // ── Error handler ────────────────────────────────────────────────
