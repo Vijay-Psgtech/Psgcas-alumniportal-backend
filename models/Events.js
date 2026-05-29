@@ -19,6 +19,7 @@ const eventSchema = new mongoose.Schema(
       type: String,
       enum: [
         "Awards",
+        "Reunion",
         "Lecture",
         "Sports",
         "Memorial",
