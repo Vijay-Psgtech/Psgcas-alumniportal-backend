@@ -32,15 +32,6 @@ app.use(
   }),
 );
 
-// For local development, allow all origins. In production, this should be restricted to the frontend domain(s).
-// app.use(
-//   cors({
-//     origin: true,
-//     credentials: true,
-//     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//     allowedHeaders: ["Content-Type", "Authorization"],
-//   }),
-// );
 
 app.use(express.json());
 app.use(cookieParser());
@@ -82,9 +73,6 @@ app.use("/api/newsletters", require("./routes/newsletters"));
 // Donations (public create + protected mine + admin all)
 app.use("/api/donations", require("./routes/donation"));
 
-// Chapters
-app.use("/api/alumni/chapters", require("./routes/chapters"));
-
 // Notifications (alumni submit + admin approve/reject)
 app.use("/api/notifications", require("./routes/notifications"));
 
@@ -96,6 +84,15 @@ app.use("/api/contact", require("./routes/contact"));
 
 // User management (Admin only)
 app.use("/api/users", require("./routes/users"));
+
+// Campaign management (Admin only)
+app.use("/api/campaigns", require("./routes/campaigns"));
+
+// Banners
+app.use("/api/banners", require("./routes/bannerRoutes"));
+
+// Notification scrolls (separate from /api/notifications)
+app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
 
 
 // ── Error handler ────────────────────────────────────────────────
