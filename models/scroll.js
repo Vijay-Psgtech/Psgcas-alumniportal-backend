@@ -18,8 +18,8 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: {
         // ✅ FIXED: Added "success" type
-        values: ["info", "success", "warning", "error"],
-        message: "Type must be info, success, warning, or error",
+        values: ["success", "warning", "info", "trending", "default"],
+        message: "Type must be info, success, warning, trending, or default",
       },
       default: "info",
     },
