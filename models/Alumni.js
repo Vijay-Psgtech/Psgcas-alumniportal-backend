@@ -169,8 +169,8 @@ const AlumniSchema = new mongoose.Schema(
 
     membershipStatus: {
       type: String,
-      enum: ['not_applied', 'pending_payment', 'under_review', "active", 'expired'],
-      default: 'not_applied'
+      enum: ['NOT_APPLIED', 'PENDING_PAYMENT', 'UNDER_REVIEW', "ACTIVE", 'EXPIRED'],
+      default: 'NOT_APPLIED'
     },
 
     // Timestamps
