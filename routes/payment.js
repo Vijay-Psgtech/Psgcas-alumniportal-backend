@@ -1,23 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// routes/donation.js
+// routes/payment.js
 // ─────────────────────────────────────────────────────────────────────────────
 const express = require("express");
 const router = express.Router();
 const {
-  getDonationCategories,
-  initiateDonationPayment,
-  getDonationStats,
-  getRecentDonations,
-  getDonationById,
-} = require("../controllers/donationController");
+  handlePaymentResponse,
+  getPaymentStatus,
+} = require("../controllers/paymentResponseController");
 
-// Public endpoints
-router.get("/categories", getDonationCategories);
-router.get("/stats", getDonationStats);
-router.get("/recent", getRecentDonations);
+// Easebuzz POSTs here after payment (surl & furl both point here)
+router.post("/response", handlePaymentResponse);
 
-// Initiate (open to guests + logged-in users)
-router.post("/initiate", initiateDonationPayment);
-router.get("/:id", getDonationById);
+// Frontend polls for status
+router.get("/status/:txnid", getPaymentStatus);
 
 module.exports = router;

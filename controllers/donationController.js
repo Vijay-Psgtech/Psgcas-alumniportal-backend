@@ -1,539 +1,204 @@
-// backend/controllers/donationController.js
-const Donation = require("../models/Donation");
-const crypto = require("crypto");
+// ─────────────────────────────────────────────────────────────────────────────
+// controllers/donationController.js
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ═════════════════════════════════════════════════════════════════════════
-// CREATE DONATION
-// ═════════════════════════════════════════════════════════════════════════
-exports.createDonations = async (req, res) => {
+const axios = require("axios");
+const Donation = require("../models/Donation");
+const { DONATION_CATEGORIES } = require("../models/Donation");
+const Payment = require("../models/Payment");
+const { EASEBUZZ_CONFIG } = require("../config/easebuzz");
+const {
+  generateInitiateHash,
+  generateTxnId,
+  formatAmount,
+} = require("../utils/Easebuzzhelper");
+
+// ─── GET /api/donation/categories ─────────────────────────────────────────────
+const getDonationCategories = (req, res) => {
+  const categories = Object.entries(DONATION_CATEGORIES).map(([key, value]) => ({
+    key,
+    ...value,
+  }));
+  res.json({ success: true, categories });
+};
+
+// ─── POST /api/donation/initiate ──────────────────────────────────────────────
+// Step 1: Collect donor info, create Donation record, initiate Easebuzz payment
+const initiateDonationPayment = async (req, res) => {
   try {
     const {
-      donorName,
-      donorEmail,
-      donorPhone,
-      donorCity,
-      donorState,
-      donorCountry,
-      amount,
-      currency,
-      paymentMethod,
-      paymentGateway,
-      message,
-      isAnonymous,
-      alumniId,
+      donorName, donorEmail, donorPhone,
+      category, amount, message,
+      isAnonymous, pan, taxReceiptRequested,
+      campaign, dedicatedTo,
+      address, userId,
     } = req.body;
 
-    // Validation
-    if (!donorName || !amount || !currency || !paymentMethod) {
+    // Validate category
+    const selectedCategory = DONATION_CATEGORIES[category?.toUpperCase()];
+    if (!selectedCategory) {
+      return res.status(400).json({ success: false, message: "Invalid donation category." });
+    }
+
+    // Minimum amount check
+    if (parseFloat(amount) < selectedCategory.minAmount) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: donorName, amount, currency, paymentMethod",
+        message: `Minimum donation for ${selectedCategory.label} is ₹${selectedCategory.minAmount}.`,
       });
     }
 
-    if (amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Donation amount must be greater than 0",
-      });
-    }
+    const txnid = generateTxnId("DON");
+    const formattedAmount = formatAmount(amount);
+    const productinfo = `Donation - ${selectedCategory.label}`;
+    const displayName = isAnonymous ? "Anonymous Donor" : donorName;
 
-    // Create new donation
-    const donation = new Donation({
-      donorName: isAnonymous ? "Anonymous Donor" : donorName,
-      donorEmail: isAnonymous ? null : donorEmail,
-      donorPhone,
-      donorCity,
-      donorState,
-      donorCountry,
-      amount,
-      currency,
-      paymentMethod,
-      paymentGateway: paymentGateway || "manual",
-      message,
-      isAnonymous: isAnonymous || false,
-      alumniId: alumniId || null,
-      status: paymentGateway ? "pending" : "pending",
-      transactionId: `TXN-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+    // Create Donation record
+    const donation = await Donation.create({
+      userId: userId || null,
+      donorName, donorEmail, donorPhone,
+      category: category.toUpperCase(),
+      amount: parseFloat(amount),
+      message, isAnonymous, pan,
+      taxReceiptRequested: !!taxReceiptRequested,
+      campaign: campaign || "GENERAL",
+      dedicatedTo,
+      address,
+      txnid,
+      status: "INITIATED",
     });
 
-    await donation.save();
-
-    console.log("✅ Donation created:", donation._id);
-
-    return res.status(201).json({
-      success: true,
-      message: "Donation created successfully",
-      donation,
+    // Create Payment record
+    const payment = await Payment.create({
+      userId: userId || null,
+      payerName: displayName,
+      payerEmail: donorEmail,
+      payerPhone: donorPhone,
+      txnid,
+      module: "DONATION",
+      amount: parseFloat(amount),
+      productinfo,
+      status: "INITIATED",
+      udf1: "DONATION",
+      udf2: category.toUpperCase(),
+      udf3: isAnonymous ? "ANONYMOUS" : "NAMED",
+      udf4: campaign || "GENERAL",
+      udf5: String(donation._id),
     });
-  } catch (error) {
-    console.error("❌ Error creating donation:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create donation",
-      error: error.message,
-    });
-  }
-};
 
-// ═════════════════════════════════════════════════════════════════════════
-// VERIFY RAZORPAY PAYMENT
-// ═════════════════════════════════════════════════════════════════════════
-exports.verifyRazorPay = async (req, res) => {
-  try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    // Build Easebuzz payload
+    // Note: Easebuzz 'firstname' must be a name (not anonymous for hash)
+    const payerFirstName = donorName.split(" ")[0];
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing Razorpay verification details",
-      });
-    }
+    const easebuzzPayload = {
+      key: EASEBUZZ_CONFIG.key,
+      txnid,
+      amount: formattedAmount,
+      productinfo,
+      firstname: payerFirstName,
+      email: donorEmail,
+      phone: donorPhone,
+      surl: EASEBUZZ_CONFIG.successUrl,
+      furl: EASEBUZZ_CONFIG.failureUrl,
+      udf1: payment.udf1,
+      udf2: payment.udf2,
+      udf3: payment.udf3,
+      udf4: payment.udf4,
+      udf5: payment.udf5,
+    };
 
-    // Verify signature (you'll need your Razorpay key secret)
-    const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "");
-    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const generated_signature = hmac.digest("hex");
+    // Generate hash
+    easebuzzPayload.hash = generateInitiateHash(easebuzzPayload);
 
-    if (generated_signature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Razorpay signature",
-      });
-    }
-
-    // Update donation status
-    const donation = await Donation.findOneAndUpdate(
-      { transactionId: razorpay_order_id },
-      {
-        status: "completed",
-        transactionId: razorpay_payment_id,
-        completedAt: new Date(),
-      },
-      { new: true }
+    // Call Easebuzz Initiate API
+    const ebResponse = await axios.post(
+      EASEBUZZ_CONFIG.initiatePaymentUrl,
+      new URLSearchParams(easebuzzPayload).toString(),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
 
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: "Donation not found",
+    const { data } = ebResponse;
+
+    if (data?.status === 1 && data?.data) {
+      return res.json({
+        success: true,
+        txnid,
+        paymentUrl: `https://${
+          EASEBUZZ_CONFIG.env === "prod" ? "pay" : "testpay"
+        }.easebuzz.in/${data.data}`,
+        donationId: donation._id,
       });
-    }
-
-    console.log("✅ Razorpay payment verified:", razorpay_payment_id);
-
-    return res.json({
-      success: true,
-      message: "Payment verified successfully",
-      donation,
-    });
-  } catch (error) {
-    console.error("❌ Error verifying Razorpay payment:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to verify payment",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// GET ALL DONATIONS (ADMIN ONLY)
-// ═════════════════════════════════════════════════════════════════════════
-exports.getAllDonations = async (req, res) => {
-  try {
-    const donations = await Donation.find().populate("alumniId").sort({ createdAt: -1 });
-
-    const stats = {
-      total: donations.length,
-      completed: donations.filter((d) => d.status === "completed").length,
-      pending: donations.filter((d) => d.status === "pending").length,
-      failed: donations.filter((d) => d.status === "failed").length,
-      cancelled: donations.filter((d) => d.status === "cancelled").length,
-      totalAmount: donations.reduce((sum, d) => sum + d.amount, 0),
-      averageAmount: donations.length > 0 ? Math.round(donations.reduce((sum, d) => sum + d.amount, 0) / donations.length) : 0,
-    };
-
-    console.log("✅ Fetched all donations");
-
-    return res.json({
-      success: true,
-      donations,
-      stats,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching donations:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch donations",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// GET DONATION HISTORY WITH FILTERS & PAGINATION
-// ═════════════════════════════════════════════════════════════════════════
-exports.getDonationHistory = async (req, res) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      status = "all",
-      currency = "all",
-      paymentMethod = "all",
-      donorType = "all",
-      search = "",
-      sortBy = "createdAt",
-      sortOrder = "desc",
-      startDate = "",
-      endDate = "",
-      minAmount = "",
-      maxAmount = "",
-    } = req.query;
-
-    // Build filter object
-    const filter = {};
-
-    if (status !== "all") {
-      filter.status = status;
-    }
-
-    if (currency !== "all") {
-      filter.currency = currency;
-    }
-
-    if (paymentMethod !== "all") {
-      filter.paymentMethod = paymentMethod;
-    }
-
-    if (donorType === "anonymous") {
-      filter.isAnonymous = true;
-    } else if (donorType === "individual") {
-      filter.isAnonymous = false;
-    }
-
-    // Search filter (name, email, transaction ID)
-    if (search) {
-      filter.$or = [
-        { donorName: new RegExp(search, "i") },
-        { donorEmail: new RegExp(search, "i") },
-        { transactionId: new RegExp(search, "i") },
-      ];
-    }
-
-    // Date range filter
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) {
-        filter.createdAt.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filter.createdAt.$lte = end;
-      }
-    }
-
-    // Amount range filter
-    if (minAmount || maxAmount) {
-      filter.amount = {};
-      if (minAmount) {
-        filter.amount.$gte = parseFloat(minAmount);
-      }
-      if (maxAmount) {
-        filter.amount.$lte = parseFloat(maxAmount);
-      }
-    }
-
-    // Sorting
-    const sortObj = {};
-    sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
-
-    // Execute query with pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const donations = await Donation.find(filter)
-      .populate("alumniId")
-      .sort(sortObj)
-      .limit(parseInt(limit))
-      .skip(skip);
-
-    const total = await Donation.countDocuments(filter);
-    const pages = Math.ceil(total / parseInt(limit));
-
-    // Calculate stats
-    const allDonations = await Donation.find(filter);
-    const stats = {
-      total: allDonations.length,
-      completed: allDonations.filter((d) => d.status === "completed").length,
-      pending: allDonations.filter((d) => d.status === "pending").length,
-      failed: allDonations.filter((d) => d.status === "failed").length,
-      cancelled: allDonations.filter((d) => d.status === "cancelled").length,
-      flagged: allDonations.filter((d) => d.adminFlagged).length,
-      totalAmount: allDonations.reduce((sum, d) => sum + d.amount, 0),
-      averageAmount: allDonations.length > 0 ? Math.round(allDonations.reduce((sum, d) => sum + d.amount, 0) / allDonations.length) : 0,
-    };
-
-    console.log(`✅ Fetched donation history - Page ${page}, Total: ${total}`);
-
-    return res.json({
-      success: true,
-      donations,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages,
-      },
-      stats,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching donation history:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch donation history",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// GET DONATION STATS
-// ═════════════════════════════════════════════════════════════════════════
-exports.getDonationStats = async (req, res) => {
-  try {
-    const donations = await Donation.find();
-
-    const stats = {
-      total: donations.length,
-      completed: donations.filter((d) => d.status === "completed").length,
-      pending: donations.filter((d) => d.status === "pending").length,
-      failed: donations.filter((d) => d.status === "failed").length,
-      cancelled: donations.filter((d) => d.status === "cancelled").length,
-      flagged: donations.filter((d) => d.adminFlagged).length,
-      totalAmount: donations.reduce((sum, d) => sum + d.amount, 0),
-      averageAmount: donations.length > 0 ? Math.round(donations.reduce((sum, d) => sum + d.amount, 0) / donations.length) : 0,
-      byPaymentMethod: {
-        upi: donations.filter((d) => d.paymentMethod === "UPI").length,
-        netbanking: donations.filter((d) => d.paymentMethod === "Net Banking").length,
-        card: donations.filter((d) => d.paymentMethod === "Card").length,
-        cheque: donations.filter((d) => d.paymentMethod === "Cheque").length,
-        wiretransfer: donations.filter((d) => d.paymentMethod === "Wire Transfer").length,
-      },
-      byCurrency: {
-        inr: donations.filter((d) => d.currency === "INR").length,
-        usd: donations.filter((d) => d.currency === "USD").length,
-      },
-    };
-
-    console.log("✅ Fetched donation stats");
-
-    return res.json({
-      success: true,
-      stats,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching stats:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch stats",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// GET DONATION BY ID
-// ═════════════════════════════════════════════════════════════════════════
-exports.getDonationById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const donation = await Donation.findById(id).populate("alumniId");
-
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: "Donation not found",
-      });
-    }
-
-    console.log("✅ Fetched donation by ID:", id);
-
-    return res.json({
-      success: true,
-      donation,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching donation:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch donation",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// UPDATE DONATION (ADMIN)
-// ═════════════════════════════════════════════════════════════════════════
-exports.updateDonation = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adminNote, status, adminFlagged, flaggedReason } = req.body;
-
-    const donation = await Donation.findByIdAndUpdate(
-      id,
-      {
-        ...(adminNote !== undefined && { adminNote }),
-        ...(status !== undefined && { status, completedAt: status === "completed" ? new Date() : null }),
-        ...(adminFlagged !== undefined && { adminFlagged, flaggedReason: adminFlagged ? flaggedReason : "" }),
-      },
-      { new: true }
-    ).populate("alumniId");
-
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: "Donation not found",
-      });
-    }
-
-    console.log("✅ Donation updated:", id);
-
-    return res.json({
-      success: true,
-      message: "Donation updated successfully",
-      donation,
-    });
-  } catch (error) {
-    console.error("❌ Error updating donation:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update donation",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// DELETE DONATION (ADMIN)
-// ═════════════════════════════════════════════════════════════════════════
-exports.deleteDonation = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const donation = await Donation.findByIdAndDelete(id);
-
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: "Donation not found",
-      });
-    }
-
-    console.log("✅ Donation deleted:", id);
-
-    return res.json({
-      success: true,
-      message: "Donation deleted successfully",
-    });
-  } catch (error) {
-    console.error("❌ Error deleting donation:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete donation",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// UPDATE DONATION FLAG STATUS
-// ═════════════════════════════════════════════════════════════════════════
-exports.flagDonation = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adminFlagged, flaggedReason } = req.body;
-
-    const donation = await Donation.findByIdAndUpdate(
-      id,
-      {
-        adminFlagged,
-        flaggedReason: adminFlagged ? flaggedReason : "",
-        flaggedAt: adminFlagged ? new Date() : null,
-      },
-      { new: true }
-    ).populate("alumniId");
-
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: "Donation not found",
-      });
-    }
-
-    console.log(`✅ Donation ${adminFlagged ? "flagged" : "unflagged"}:`, id);
-
-    return res.json({
-      success: true,
-      message: `Donation ${adminFlagged ? "flagged" : "unflagged"} successfully`,
-      donation,
-    });
-  } catch (error) {
-    console.error("❌ Error updating flag status:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update flag status",
-      error: error.message,
-    });
-  }
-};
-
-// ═════════════════════════════════════════════════════════════════════════
-// UPDATE DONATION STATUS
-// ═════════════════════════════════════════════════════════════════════════
-exports.updateDonationStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!["pending", "completed", "failed", "cancelled"].includes(status)) {
+    } else {
+      await Payment.findByIdAndUpdate(payment._id, { status: "FAILURE" });
+      await Donation.findByIdAndUpdate(donation._id, { status: "FAILURE" });
       return res.status(400).json({
         success: false,
-        message: "Invalid status value",
+        message: data?.error_desc || "Payment initiation failed. Please try again.",
       });
     }
-
-    const donation = await Donation.findByIdAndUpdate(
-      id,
-      {
-        status,
-        completedAt: status === "completed" ? new Date() : null,
-      },
-      { new: true }
-    ).populate("alumniId");
-
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: "Donation not found",
-      });
-    }
-
-    console.log("✅ Donation status updated:", id, status);
-
-    return res.json({
-      success: true,
-      message: "Donation status updated successfully",
-      donation,
-    });
-  } catch (error) {
-    console.error("❌ Error updating status:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update status",
-      error: error.message,
-    });
+  } catch (err) {
+    console.error("[DonationPayment] initiate error:", err.message);
+    res.status(500).json({ success: false, message: "Server error during payment initiation." });
   }
+};
+
+// ─── GET /api/donation/stats ───────────────────────────────────────────────
+// Public stats for donation wall / progress bar
+const getDonationStats = async (req, res) => {
+  try {
+    const stats = await Donation.aggregate([
+      { $match: { status: "SUCCESS" } },
+      {
+        $group: {
+          _id: "$category",
+          totalAmount: { $sum: "$amount" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { totalAmount: -1 } },
+    ]);
+    const totalRaised = stats.reduce((sum, s) => sum + s.totalAmount, 0);
+    res.json({ success: true, stats, totalRaised });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+// ─── GET /api/donation/recent ──────────────────────────────────────────────
+// Recent donations for donation wall (non-anonymous only)
+const getRecentDonations = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const donations = await Donation.find({
+      status: "SUCCESS",
+      isAnonymous: false,
+    })
+      .select("donorName category amount message campaign createdAt")
+      .sort({ createdAt: -1 })
+      .limit(limit);
+    res.json({ success: true, donations });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+// ─── GET /api/donation/:id ─────────────────────────────────────────────────
+const getDonationById = async (req, res) => {
+  try {
+    const donation = await Donation.findById(req.params.id).populate("paymentId");
+    if (!donation) {
+      return res.status(404).json({ success: false, message: "Donation not found." });
+    }
+    res.json({ success: true, donation });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+module.exports = {
+  getDonationCategories,
+  initiateDonationPayment,
+  getDonationStats,
+  getRecentDonations,
+  getDonationById,
 };

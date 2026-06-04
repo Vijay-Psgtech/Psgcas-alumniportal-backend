@@ -2,11 +2,19 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
+dotenv.config();
 const connectDB = require("./config/db");
 
-dotenv.config();
+const { handlePaymentResponse } = require("./controllers/paymentResponseController");
+
+// Validate Easebuzz config on startup
+const { validate: validateEasebuzz } = require("./config/easebuzz");
+validateEasebuzz();
 
 const app = express();
+
+app.post("/api/payment/response", express.urlencoded({ extended: true }), handlePaymentResponse);
+
 connectDB();
 
 // ── CORS ─────────────────────────────────────────────────────────
@@ -93,6 +101,10 @@ app.use("/api/banners", require("./routes/bannerRoutes"));
 
 // Notification scrolls (separate from /api/notifications)
 app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
+
+// Payment routes (Easebuzz integration)
+app.use("/api/payment", require("./routes/payment"));
+app.use("/api/membership", require("./routes/membership"));
 
 
 // ── Error handler ────────────────────────────────────────────────
