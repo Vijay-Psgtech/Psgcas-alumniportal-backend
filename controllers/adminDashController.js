@@ -2,6 +2,7 @@ const Alumni = require("../models/Alumni");
 const Donation = require("../models/Donation");
 const Event = require("../models/Events");
 const Album = require("../models/Album");
+const Membership = require("../models/Membership");
 
 // GET /api/admin/dashboard/alumni/all
 exports.getAllAlumniForAdmin = async (req, res) => {
@@ -82,6 +83,8 @@ exports.getDashboardStats = async (req, res) => {
       pendingDonations,
       totalEvents,
       albumsCount,
+      totalMembershipFees,
+      completedMembership,
     ] = await Promise.all([
       Alumni.countDocuments({ role: "Alumni" }),
       Alumni.countDocuments({ isApproved: true, role: "Alumni" }),
@@ -90,6 +93,10 @@ exports.getDashboardStats = async (req, res) => {
       Donation.countDocuments({ status: "pending" }),
       Event.countDocuments(),
       Album.countDocuments(),
+      Membership.find({ membershipStatus: "ACTIVE" }).then((memberships) =>
+        memberships.reduce((sum, m) => sum + m.amount, 0),
+      ),
+      Membership.countDocuments({ membershipStatus: "ACTIVE" }),
     ]);
 
     res.json({
@@ -106,6 +113,8 @@ exports.getDashboardStats = async (req, res) => {
         pendingDonations: pendingDonations || 0,
         totalEvents: totalEvents || 0,
         totalAlbums: albumsCount || 0,
+        totalMembershipFees: totalMembershipFees || 0,
+        completedMembership: completedMembership || 0,
       },
     });
   } catch (error) {
@@ -136,7 +145,7 @@ exports.getAllDonations = async (req, res) => {
     else if (sortBy === "donor") sortOptions = { donorName: 1 };
 
     const donations = await Donation.find(filter)
-      .populate("alumniId", "firstName lastName email")
+      .populate("alumniId", "donorName donorEmail")
       .sort(sortOptions);
 
     const completed = donations.filter((d) => d.status === "completed");
