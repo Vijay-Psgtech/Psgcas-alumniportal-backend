@@ -5,6 +5,7 @@ const {
   getAllAlumniForAdmin,
   getDashboardStats,
   getAllDonations,
+  getAllMemberships,
 } = require("../controllers/adminDashController");
 
 // All routes protected with adminAuth middleware
@@ -16,6 +17,10 @@ router.get("/alumni/all", getAllAlumniForAdmin);
 // ============ DONATION MANAGEMENT ROUTES ============
 // Get all donations
 router.get("/donations/all", getAllDonations);
+
+// ============ MEMBERSHIP MANAGEMENT ROUTES ============
+// Get all memberships
+router.get("/memberships/all", getAllMemberships);
 
 // ============ STATISTICS ROUTE ============
 // Get dashboard statistics
