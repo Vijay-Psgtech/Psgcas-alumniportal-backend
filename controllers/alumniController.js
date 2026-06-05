@@ -400,6 +400,7 @@ exports.getAlumniBatchWise = async (req, res) => {
           jobTitle: 1,
           files: 1,
           isApproved: 1,
+          membershipStatus: 1,
         },
       },
       { $sort: { batchYear: sort === "asc" ? 1 : -1 } },
