@@ -169,3 +169,73 @@ exports.getAllDonations = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// ==================== Membership Management ====================
+// GET /api/admin/dashboard/memberships
+exports.getAllMemberships = async (req, res) => {
+  try {
+    const {
+      membershipStatus,
+      startDate,
+      endDate,
+      sortBy,
+      department,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    
+    let filter = {};
+
+    if (membershipStatus) filter.membershipStatus = membershipStatus;
+
+    if (department) filter.department = department;
+
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+
+    let sortOptions = { createdAt: -1 };
+    if (sortBy === "amount") sortOptions = { amount: -1 };
+    else if (sortBy === "member") sortOptions = { memberName: 1 };
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // populate payment mode details from payment collection
+    const memberships = await Membership.find(filter)
+      .populate("paymentId", "gatewayResponse.mode")
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+
+    const totalMemberships = await Membership.countDocuments();
+
+    const activeMembers = await Membership.countDocuments({ membershipStatus: "ACTIVE" });
+
+    const totalAmount = await Membership.find({ membershipStatus: "ACTIVE" }).then((memberships) =>
+      memberships.reduce((sum, m) => sum + m.amount, 0),
+    );
+
+    const summary = {
+      totalMemberships: totalMemberships,
+      activeMemberships: activeMembers,
+      totalAmount: totalAmount,
+    };
+
+    res.json({
+      message: "Memberships retrieved successfully",
+      summary,
+      memberships,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(
+        (await Membership.countDocuments(filter)) / parseInt(limit),
+      ),
+    });
+  } catch (error) {
+    console.error("Get Memberships Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
