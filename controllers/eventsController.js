@@ -10,7 +10,6 @@ exports.getAllEvents = async (req, res) => {
     if (category) {
       query.category = { $regex: new RegExp(`^${category}$`, "i") };
     }
-    console.log("Query", query);
     const events = await Event.find(query).sort({ createdAt: -1 });
 
    res.json({
