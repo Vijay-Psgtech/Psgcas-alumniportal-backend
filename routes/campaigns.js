@@ -135,7 +135,6 @@ router.post("/response/:responseId/publish", async (req, res) => {
       });
     }
 
-    console.log("✅ Response published successfully:", responseId);
 
     res.status(200).json({
       success: true,
@@ -187,7 +186,6 @@ router.delete("/response/:responseId", async (req, res) => {
       }
     }
 
-    console.log("✅ Response deleted successfully:", responseId);
 
     res.status(200).json({
       success: true,
@@ -303,7 +301,6 @@ router.get("/:id/responses/export", async (req, res) => {
     );
     res.send(csv);
 
-    console.log("✅ CSV exported successfully for campaign:", id);
   } catch (error) {
     console.error("❌ Export responses error:", error);
     res.status(500).json({
@@ -494,7 +491,6 @@ router.post("/:id/respond", async (req, res) => {
     campaign.responses.push(response._id);
     await campaign.save();
 
-    console.log("✅ Response submitted successfully:", response._id);
 
     res.status(201).json({
       success: true,
@@ -597,7 +593,6 @@ router.post("/", async (req, res) => {
 
     const campaign = await Campaign.create(campaignData);
 
-    console.log("✅ Campaign created successfully:", campaign._id);
 
     res.status(201).json({
       success: true,
@@ -683,7 +678,6 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    console.log("✅ Campaign updated successfully:", id);
 
     res.status(200).json({
       success: true,
@@ -725,8 +719,6 @@ router.delete("/:id", async (req, res) => {
 
     // ✅ Delete all responses for this campaign
     await CampaignResponse.deleteMany({ campaignId: id });
-
-    console.log("✅ Campaign deleted successfully:", id);
 
     res.status(200).json({
       success: true,

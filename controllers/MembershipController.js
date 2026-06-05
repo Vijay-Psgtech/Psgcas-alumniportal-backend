@@ -24,9 +24,6 @@ const getMembershipTiers = (req, res) => {
 // POST /api/membership/initiate
 // Step 1: Collect registration data, create a Membership record, initiate payment
 const initiateMembershipPayment = async (req, res) => {
-  console.log("KEY:", process.env.EASEBUZZ_KEY);
-  console.log("SALT:", process.env.EASEBUZZ_SALT);
-  console.log("ENV:", process.env.EASEBUZZ_ENV);
   try {
     const {
       firstName, lastName, email, phone,
@@ -112,10 +109,6 @@ const initiateMembershipPayment = async (req, res) => {
       new URLSearchParams(easebuzzPayload).toString(),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
-
-    // console.log("Easebuzz Initiate URL:", EASEBUZZ_CONFIG.initiatePaymentUrl);
-    // console.log("Easebuzz Initiate Payload:", easebuzzPayload);
-    // console.log("Easebuzz Initiate Response:", ebResponse.data);
  
     const { data } = ebResponse;
  

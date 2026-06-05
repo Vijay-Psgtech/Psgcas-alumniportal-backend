@@ -53,7 +53,6 @@ exports.getAlbumByYear = async (req, res) => {
 
 // ── CREATE new album ────────────────────────────────────────────────
 exports.createAlbum = async (req, res) => {
-  console.log("Body", req.body);
   try {
     let { year, title, event, date, photos, accent, tags } = req.body;
 

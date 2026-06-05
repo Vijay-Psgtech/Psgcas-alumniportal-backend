@@ -70,9 +70,6 @@ exports.getDepartmentsByType = async (req, res) => {
 exports.createDepartment = async (req, res) => {
   try {
     const { name, degree, programmeType, fundingType, description } = req.body;
-
-    console.log("📝 Creating department with req.user:", req.user);
-
     // ✅ FIX: Check for _id (set by authMiddleware)
     if (!req.user || !req.user._id) {
       console.error("❌ User not authenticated. req.user:", req.user);
@@ -123,17 +120,12 @@ exports.createDepartment = async (req, res) => {
       createdBy: req.user._id,  // ✅ FIX: Uses _id
     });
 
-    console.log("💾 Saving department:", {
-      name: department.name,
-      createdBy: department.createdBy,
-    });
 
     await department.save();
 
-    // Populate createdBy info in response
+    // Populate createdBy info in respons
     await department.populate("createdBy", "firstName lastName email");
 
-    console.log("✅ Department created successfully:", department._id);
 
     res.status(201).json({
       success: true,

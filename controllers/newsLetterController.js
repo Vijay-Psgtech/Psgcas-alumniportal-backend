@@ -88,7 +88,6 @@ exports.createNewsLetter = async (req, res) => {
     }
     
     const savedNewsletter = await newNewsletter.save();
-    console.log("✅ Newsletter created:", savedNewsletter._id);
     
     res.status(201).json({ success: true, data: savedNewsletter });
   } catch (error) {
@@ -146,7 +145,6 @@ exports.updateNewsLetter = async (req, res) => {
     }
 
     const updatedNewsletter = await newsletter.save();
-    console.log("✅ Newsletter updated:", updatedNewsletter._id);
     
     res.json({ success: true, data: updatedNewsletter });
   } catch (error) {
@@ -171,7 +169,6 @@ exports.deleteNewsLetter = async (req, res) => {
     }
 
     await Newsletter.findByIdAndDelete(req.params.id);
-    console.log("✅ Newsletter deleted:", req.params.id);
     
     res.json({ success: true, message: "Newsletter deleted successfully" });
   } catch (error) {
