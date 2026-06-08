@@ -4,7 +4,6 @@
 
 const axios = require("axios");
 const Donation = require("../models/Donation");
-const { DONATION_CATEGORIES } = require("../models/Donation");
 const Payment = require("../models/Payment");
 const { EASEBUZZ_CONFIG } = require("../config/easebuzz");
 const {
@@ -13,15 +12,6 @@ const {
   formatAmount,
 } = require("../utils/Easebuzzhelper");
 
-// ─── GET /api/donation/categories ─────────────────────────────────────────────
-const getDonationCategories = (req, res) => {
-  const categories = Object.entries(DONATION_CATEGORIES).map(([key, value]) => ({
-    key,
-    ...value,
-  }));
-  res.json({ success: true, categories });
-};
-
 // ─── POST /api/donation/initiate ──────────────────────────────────────────────
 // Step 1: Collect donor info, create Donation record, initiate Easebuzz payment
 const initiateDonationPayment = async (req, res) => {
@@ -29,37 +19,24 @@ const initiateDonationPayment = async (req, res) => {
     const {
       donorName, donorEmail, donorPhone,
       category, amount, message,
-      isAnonymous, pan, taxReceiptRequested,
+      isAnonymous, pan, aadhaar, taxReceiptRequested,
       campaign, dedicatedTo,
       address, userId,
     } = req.body;
 
-    // Validate category
-    const selectedCategory = DONATION_CATEGORIES[category?.toUpperCase()];
-    if (!selectedCategory) {
-      return res.status(400).json({ success: false, message: "Invalid donation category." });
-    }
-
-    // Minimum amount check
-    if (parseFloat(amount) < selectedCategory.minAmount) {
-      return res.status(400).json({
-        success: false,
-        message: `Minimum donation for ${selectedCategory.label} is ₹${selectedCategory.minAmount}.`,
-      });
-    }
 
     const txnid = generateTxnId("DON");
     const formattedAmount = formatAmount(amount);
-    const productinfo = `Donation - ${selectedCategory.label}`;
+    const productinfo = `Donation - ${category}`;
     const displayName = isAnonymous ? "Anonymous Donor" : donorName;
 
     // Create Donation record
     const donation = await Donation.create({
       userId: userId || null,
       donorName, donorEmail, donorPhone,
-      category: category.toUpperCase(),
+      category: category,
       amount: parseFloat(amount),
-      message, isAnonymous, pan,
+      message, isAnonymous, pan, aadhaar,
       taxReceiptRequested: !!taxReceiptRequested,
       campaign: campaign || "GENERAL",
       dedicatedTo,
@@ -125,7 +102,7 @@ const initiateDonationPayment = async (req, res) => {
         txnid,
         paymentUrl: `https://${
           EASEBUZZ_CONFIG.env === "prod" ? "pay" : "testpay"
-        }.easebuzz.in/${data.data}`,
+        }.easebuzz.in/pay/${data.data}`,
         donationId: donation._id,
       });
     } else {
@@ -196,7 +173,6 @@ const getDonationById = async (req, res) => {
 };
 
 module.exports = {
-  getDonationCategories,
   initiateDonationPayment,
   getDonationStats,
   getRecentDonations,
