@@ -23,6 +23,7 @@ const allowedOrigins = [
   "http://localhost:5174",
   "http://localhost:5000",
   "https://alumnitestpsgcas.psginstitutions.in",
+  "https://alumni.psgcas.ac.in",
 ];
 
 app.use(
@@ -78,9 +79,6 @@ app.use("/api/albums", require("./routes/albums"));
 // ── NEW: NEWSLETTERS API (Create, Read, Update, Delete) ───────────────
 app.use("/api/newsletters", require("./routes/newsletters"));
 
-// Donations (public create + protected mine + admin all)
-app.use("/api/donations", require("./routes/donation"));
-
 // Notifications (alumni submit + admin approve/reject)
 app.use("/api/notifications", require("./routes/notifications"));
 
@@ -105,6 +103,7 @@ app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
 // Payment routes (Easebuzz integration)
 app.use("/api/payment", require("./routes/payment"));
 app.use("/api/membership", require("./routes/membership"));
+app.use("/api/donation", require("./routes/donation"));
 
 
 // ── Error handler ────────────────────────────────────────────────
