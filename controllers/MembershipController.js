@@ -9,7 +9,7 @@ const {
     generateTxnId,
     formatAmount
     
-} = require("../utils/Easebuzzhelper");
+} = require("../utils/easebuzzHelper");
  
 
 // GET /api/membership/tiers

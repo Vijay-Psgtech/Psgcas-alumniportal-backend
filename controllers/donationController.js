@@ -10,7 +10,7 @@ const {
   generateInitiateHash,
   generateTxnId,
   formatAmount,
-} = require("../utils/Easebuzzhelper");
+} = require("../utils/easebuzzHelper");
 
 // ─── POST /api/donation/initiate ──────────────────────────────────────────────
 // Step 1: Collect donor info, create Donation record, initiate Easebuzz payment

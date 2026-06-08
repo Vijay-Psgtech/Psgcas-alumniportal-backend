@@ -9,7 +9,7 @@ const {
   getMembershipById,
   getMembershipByUser,
   getAllMembershipData,
-} = require("../controllers/membershipController");
+} = require("../controllers/MembershipController");
 const adminAuth = require("../middleware/adminAuth");
 
 // Public
