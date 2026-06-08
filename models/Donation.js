@@ -4,45 +4,6 @@
 
 const mongoose = require("mongoose");
 
-// Donation categories available in the alumni portal
-const DONATION_CATEGORIES = {
-  SCHOLARSHIP: {
-    label: "Scholarship Fund",
-    description: "Support deserving students with scholarships",
-    minAmount: 500,
-  },
-  STUDENT_WELLNESS: {
-    label: "Student Wellness",
-    description: "Mental health and wellness programs for students",
-    minAmount: 200,
-  },
-  CAMPUS_INFRASTRUCTURE: {
-    label: "Campus Infrastructure",
-    description: "Labs, libraries, and campus development",
-    minAmount: 1000,
-  },
-  RESEARCH_FUND: {
-    label: "Research & Innovation Fund",
-    description: "Support student and faculty research projects",
-    minAmount: 500,
-  },
-  SPORTS_DEVELOPMENT: {
-    label: "Sports Development",
-    description: "Sports facilities and inter-college competitions",
-    minAmount: 200,
-  },
-  CULTURAL_ACTIVITIES: {
-    label: "Cultural Activities",
-    description: "Annual cultural events and art programs",
-    minAmount: 200,
-  },
-  GENERAL: {
-    label: "General Fund",
-    description: "Institution's general development fund",
-    minAmount: 100,
-  },
-};
-
 const DonationSchema = new mongoose.Schema(
   {
     // ── Donor identity ────────────────────────────────────────────────────────
@@ -60,7 +21,7 @@ const DonationSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: Object.keys(DONATION_CATEGORIES),
+      enum: ["Scholarship Fund", "Research Initiatives", "infrastructure"],
     },
     amount: { type: Number, required: true, min: 1 },
     message: { type: String, trim: true, maxlength: 500, default: "" },
@@ -71,6 +32,7 @@ const DonationSchema = new mongoose.Schema(
 
     // ── Tax benefit details (80G India) ───────────────────────────────────────
     pan: { type: String, uppercase: true, trim: true, default: "" },
+    aadhaar: { type:Number, trim: true, default: "" },
     taxReceiptRequested: { type: Boolean, default: false },
     taxReceiptSent: { type: Boolean, default: false },
     taxReceiptNumber: { type: String, default: null },
@@ -108,10 +70,6 @@ DonationSchema.index({ category: 1, status: 1 });
 DonationSchema.index({ donorEmail: 1, status: 1 });
 DonationSchema.index({ campaign: 1, status: 1 });
 
-// Virtual: formatted category label
-DonationSchema.virtual("categoryLabel").get(function () {
-  return DONATION_CATEGORIES[this.category]?.label || this.category;
-});
 
 // Mark donation complete after successful payment
 DonationSchema.methods.complete = function (paymentId) {
@@ -120,4 +78,3 @@ DonationSchema.methods.complete = function (paymentId) {
 };
 
 module.exports = mongoose.model("Donation", DonationSchema);
-module.exports.DONATION_CATEGORIES = DONATION_CATEGORIES;
