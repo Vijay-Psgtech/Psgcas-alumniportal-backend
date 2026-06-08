@@ -4,7 +4,6 @@
 const express = require("express");
 const router = express.Router();
 const {
-  getDonationCategories,
   initiateDonationPayment,
   getDonationStats,
   getRecentDonations,
@@ -12,7 +11,6 @@ const {
 } = require("../controllers/donationController");
 
 // Public endpoints
-router.get("/categories", getDonationCategories);
 router.get("/stats", getDonationStats);
 router.get("/recent", getRecentDonations);
 
