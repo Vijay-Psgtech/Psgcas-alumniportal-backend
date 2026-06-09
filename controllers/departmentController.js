@@ -241,7 +241,7 @@ exports.getAllDepartmentsAdmin = async (req, res) => {
   try {
     const departments = await Department.find()
       .populate("createdBy", "firstName lastName email")
-      .sort("-createdAt");
+      .sort("name");
 
     res.json({
       success: true,
