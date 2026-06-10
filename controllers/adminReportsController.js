@@ -93,3 +93,153 @@ exports.getAlumniByDepartment = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+// Get alumni details with department grouping
+exports.getAlumniDeptWise = async (req, res) => {
+  try{
+
+    const {
+      batchYear,
+      department,
+      search,
+      page = 1,
+      limit = 50,
+    } = req.query;
+
+    let query = { role: "Alumni" };
+
+    // Batch filter
+    if (batchYear) {
+      query.batchYear = batchYear === "null" ? null : batchYear;
+    }
+
+    // Department filter
+    if (department) {
+      query.department = department;
+    }
+
+    // Search filter
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: "i" } },
+        { lastName: { $regex: search, $options: "i" } },
+        { currentCompany: { $regex: search, $options: "i" } },
+        { rollNumber: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const alumni = await Alumni.aggregate([
+      { $match: query },
+      {
+        $project: {
+          alumniId: 1,
+          firstName: 1,
+          lastName: 1,
+          rollNumber: 1,
+          department: 1,
+          degree: 1,
+          batchYear: 1,
+          currentCompany: 1,
+          jobTitle: 1,
+          files: 1,
+          isApproved: 1,
+          membershipStatus: 1,
+        },
+      },
+      {
+        $group: {
+          _id: "$department",
+          alumni: { $push: "$$ROOT" },
+        },
+      },
+      { $sort: { department: 1 } },
+      { $skip: skip },
+      { $limit: Number(limit) },
+
+    ]);
+    res.status(200).json({
+      success: true,
+      data: alumni,
+    });
+  } catch(error) {
+    console.error("Error fetching alumni data by department:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+}
+
+// Get Alumni details with batchYear grouping
+exports.getAlumniBatchWise = async (req, res) => {
+  try{
+
+    const {
+      batchYear,
+      department,
+      search,
+      page = 1,
+      limit = 50,
+    } = req.query;
+
+    let query = { role: "Alumni" };
+
+    // Batch filter
+    if (batchYear) {
+      query.batchYear = batchYear === "null" ? null : batchYear;
+    }
+
+    // Department filter
+    if (department) {
+      query.department = department;
+    }
+
+    // Search filter
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: "i" } },
+        { lastName: { $regex: search, $options: "i" } },
+        { currentCompany: { $regex: search, $options: "i" } },
+        { rollNumber: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const alumni = await Alumni.aggregate([
+      { $match: query },
+      {
+        $project: {
+          alumniId: 1,
+          firstName: 1,
+          lastName: 1,
+          rollNumber: 1,
+          department: 1,
+          degree: 1,
+          batchYear: 1,
+          currentCompany: 1,
+          jobTitle: 1,
+          files: 1,
+          isApproved: 1,
+          membershipStatus: 1,
+        },
+      },
+      {
+        $group: {
+          _id: "$batchYear",
+          alumni: { $push: "$$ROOT" },
+        },
+      },
+      { $sort: { batchYear: 1 } },
+      { $skip: skip },
+      { $limit: Number(limit) },
+
+    ]);
+    res.status(200).json({
+      success: true,
+      data: alumni,
+    });
+  } catch(error) {
+    console.error("Error fetching alumni data by batchYear:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+}
