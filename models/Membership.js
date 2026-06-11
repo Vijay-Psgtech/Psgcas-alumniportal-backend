@@ -4,14 +4,15 @@
 
 const mongoose = require("mongoose");
 
-// Membership tiers and their fees (in INR)
-const MEMBERSHIP_TIERS = {
-  // ANNUAL: { label: "Annual Membership", amount: 500, durationMonths: 12 },
-  LIFETIME : { label: "Lifetime Membership", amount: 600, durationMonths: null },
-  TEST: { label: "Test Membership", amount: 1, durationMonths: 1 }, // For testing purposes
-  // STUDENT: { label: "Student Membership", amount: 200, durationMonths: 12 },
-  // CORPORATE: { label: "Corporate Membership", amount: 10000, durationMonths: 12 },
-};
+const MembershipTiersSchema = new mongoose.Schema(
+  {
+    label: { type: String, required: true },
+    key: { type: String, required: true },
+    amount: { type: Number, required: true },
+    durationMonths: { type: Number, default: null },
+  },
+  { timestamps: true }
+);
 
 const MembershipSchema = new mongoose.Schema(
   {
@@ -35,7 +36,12 @@ const MembershipSchema = new mongoose.Schema(
     tier: {
       type: String,
       required: true,
-      enum: Object.keys(MEMBERSHIP_TIERS),
+      validate: {
+        validator: async function (value) {
+          return !!(await MembershipTiers.exists({ key: value }));
+        },
+        message: (props) => `Invalid membership tier: ${props.value}`,
+      },
     },
     amount: { type: Number, required: true },
 
@@ -71,17 +77,21 @@ const MembershipSchema = new mongoose.Schema(
 );
 
 // Activate membership after successful payment
-MembershipSchema.methods.activate = function (paymentId) {
-  const tier = MEMBERSHIP_TIERS[this.tier];
+MembershipSchema.methods.activate = async function (paymentId) {
+  const tier = await MembershipTiers.findOne({ key: this.tier });
   this.membershipStatus = "ACTIVE";
   this.startDate = new Date();
   this.paymentId = paymentId;
-  if (tier.durationMonths) {
+  if (tier?.durationMonths) {
     const expiry = new Date();
-    expiry.setMonth(expiry.getMonth() + tier.durationMonths);
+    expiry.setMonth(expiry.getMonth() + Number(tier.durationMonths));
     this.expiryDate = expiry;
   }
 };
 
-module.exports = mongoose.model("Membership", MembershipSchema);
-module.exports.MEMBERSHIP_TIERS = MEMBERSHIP_TIERS;
+const Membership = mongoose.model("Membership", MembershipSchema);
+const MembershipTiers = mongoose.model("MembershipTiers", MembershipTiersSchema);
+
+module.exports = Membership;
+module.exports.Membership = Membership;
+module.exports.MembershipTiers = MembershipTiers;
