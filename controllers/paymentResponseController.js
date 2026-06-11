@@ -79,7 +79,7 @@ const handlePaymentResponse = async (req, res) => {
       if (module === "MEMBERSHIP") {
         const membership = await Membership.findById(recordId);
         if (membership) {
-          membership.activate(payment._id);
+          await membership.activate(payment._id);
           await membership.save();
         }
 
