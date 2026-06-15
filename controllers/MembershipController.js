@@ -1,7 +1,7 @@
 const axios = require("axios");
 const Membership = require("../models/Membership");
+const { MembershipTiers } = require("../models/Membership");
 const Alumni = require("../models/Alumni");
-const { MEMBERSHIP_TIERS } = require("../models/Membership");
 const Payment = require("../models/Payment");
 const { EASEBUZZ_CONFIG } = require("../config/easebuzz");
 const {
@@ -13,11 +13,8 @@ const {
  
 
 // GET /api/membership/tiers
-const getMembershipTiers = (req, res) => {
-  const tiers = Object.entries(MEMBERSHIP_TIERS).map(([key, value]) => ({
-    key,
-    ...value,
-  }));
+const getMembershipTiers = async (req, res) => {
+  const tiers = await MembershipTiers.find();
   res.json({ success: true, tiers });
 };
 
@@ -32,7 +29,7 @@ const initiateMembershipPayment = async (req, res) => {
     } = req.body;
  
     // Validate tier
-    const selectedTier = MEMBERSHIP_TIERS[tier?.toUpperCase()];
+    const selectedTier = await MembershipTiers.findOne({ key: tier?.toUpperCase() });
     if (!selectedTier) {
       return res.status(400).json({ success: false, message: "Invalid membership tier." });
     }
