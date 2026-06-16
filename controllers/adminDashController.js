@@ -197,7 +197,7 @@ exports.getAllMemberships = async (req, res) => {
       if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
 
-    let sortOptions = { _id: -1 };
+    let sortOptions = { createdAt: -1 };
     if (sortBy === "amount") sortOptions = { amount: -1 };
     else if (sortBy === "member") sortOptions = { memberName: 1 };
 
