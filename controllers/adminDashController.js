@@ -27,7 +27,8 @@ exports.getAllAlumniForAdmin = async (req, res) => {
         { firstName: { $regex: search, $options: "i" } },
         { lastName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
-        { currentCompany: { $regex: search, $options: "i" } },
+        { jobTitle: { $regex: search, $options: "i" } },
+        { rollNumber: { $regex: search, $options: "i" } },
       ];
     }
 
