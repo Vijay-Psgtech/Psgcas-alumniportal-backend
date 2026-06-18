@@ -21,7 +21,7 @@ const DonationSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ["Scholarship Fund", "Research Initiatives", "infrastructure"],
+      enum: ["Scholarship Fund", "Research Initiatives", "infrastructure", "wellness", "alumni_connect"],
     },
     amount: { type: Number, required: true, min: 1 },
     message: { type: String, trim: true, maxlength: 500, default: "" },
