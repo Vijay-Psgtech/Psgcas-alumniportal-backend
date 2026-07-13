@@ -22,7 +22,7 @@ router.post('/', (req, res) => {
     const mailOptions = {
         from: process.env.EMAIL_USER,
         replyTo: email,
-        to: 'rvk.its@psgtech.ac.in', // Replace with your email address
+        to: 'alumni@psgcas.ac.in', // Replace with your email address
         subject: `New Contact Form Submission from ${name} - ${subject || 'No Subject'}`,
         text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone || 'N/A'}\nSubject: ${subject || 'No Subject'}\n\n${message}`,
         html: `
