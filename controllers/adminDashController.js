@@ -207,6 +207,7 @@ exports.getAllMemberships = async (req, res) => {
     // populate payment mode details from payment collection
     const memberships = await Membership.find(filter)
       .populate("paymentId", "gatewayResponse.mode")
+      .populate("alumniId", "rollNumber jobTitle studyStartYear studyEndYear")
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
