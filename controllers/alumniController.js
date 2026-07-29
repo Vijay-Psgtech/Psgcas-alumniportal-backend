@@ -263,19 +263,12 @@ exports.getMapData = async (req, res) => {
 
     if (department) filter.department = department;
 
-    // const alumni = await Alumni.find({
-    //   ...filter,
-    //   country: { $exists: true, $ne: "" },
-    //   city: { $exists: true, $ne: "" },
-    // })
-    //   .select("-password")
-    //   .lean();
-
     const alumni = await Alumni.aggregate([
       { $match: {
         ...filter,
         country: { $exists: true, $ne: "" },
         city: { $exists: true, $ne: "" },
+        location: { $exists: true, $ne: "" },
       } },
       {
         $project: {
