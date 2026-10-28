@@ -1,4 +1,36 @@
 const Newsletter = require("../models/Newsletter");
+const fs = require("fs/promises");
+const path = require("path");
+
+const removeUploadedNewsletterFile = async (filePath) => {
+  const normalizedPath = filePath?.replace(/\\/g, "/");
+  const prefix = "uploads/newsletters/";
+  if (!normalizedPath?.startsWith(prefix)) return;
+
+  const root = path.resolve(__dirname, "..", "uploads", "newsletters");
+  const target = path.resolve(root, normalizedPath.slice(prefix.length));
+  if (!target.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Invalid newsletter upload path");
+  }
+
+  try {
+    await fs.unlink(target);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+};
+
+const cleanupRequestFiles = async (files = []) => {
+  await Promise.all(
+    files.map(async (file) => {
+      try {
+        await removeUploadedNewsletterFile(file.path);
+      } catch (error) {
+        console.error("Could not remove unreferenced newsletter upload:", error);
+      }
+    }),
+  );
+};
 
 exports.getAllNewsLetters = async (req, res) => {
   try {
@@ -42,6 +74,7 @@ exports.createNewsLetter = async (req, res) => {
 
     // Validation
     if (!title || !date || !description) {
+      await cleanupRequestFiles(req.files);
       return res.status(400).json({
         success: false,
         message: "Title, date, and description are required",
@@ -78,6 +111,7 @@ exports.createNewsLetter = async (req, res) => {
     
     res.status(201).json({ success: true, data: savedNewsletter });
   } catch (error) {
+    await cleanupRequestFiles(req.files);
     console.error("Error creating newsletter:", error);
     res
       .status(500)
@@ -102,12 +136,17 @@ exports.updateNewsLetter = async (req, res) => {
 
     const newsletter = await Newsletter.findById(req.params.id);
     if (!newsletter) {
+      await cleanupRequestFiles(req.files);
       return res
         .status(404)
         .json({ success: false, message: "Newsletter not found" });
     }
 
-    // Update fields
+    const previousFiles = {
+      imageUrl: newsletter.imageUrl,
+      pdfUrl: newsletter.pdfUrl,
+    };
+
     newsletter.title = title ?? newsletter.title;
     newsletter.date = date ?? newsletter.date;
     newsletter.category = category ?? newsletter.category;
@@ -132,10 +171,29 @@ exports.updateNewsLetter = async (req, res) => {
     }
 
     const updatedNewsletter = await newsletter.save();
+    try {
+      if (previousFiles.imageUrl !== updatedNewsletter.imageUrl) {
+        await removeUploadedNewsletterFile(previousFiles.imageUrl);
+      }
+      if (previousFiles.pdfUrl !== updatedNewsletter.pdfUrl) {
+        await removeUploadedNewsletterFile(previousFiles.pdfUrl);
+      }
+    } catch (error) {
+      console.error(
+        "Newsletter updated, but a replaced upload could not be removed:",
+        error,
+      );
+      return res.status(500).json({
+        success: false,
+        message: "Newsletter updated, but a replaced upload could not be removed",
+      });
+    }
+
     console.log("✅ Newsletter updated:", updatedNewsletter._id);
     
     res.json({ success: true, data: updatedNewsletter });
   } catch (error) {
+    await cleanupRequestFiles(req.files);
     console.error("Error updating newsletter:", error);
     res
       .status(500)
@@ -157,6 +215,19 @@ exports.deleteNewsLetter = async (req, res) => {
     }
 
     await Newsletter.findByIdAndDelete(req.params.id);
+    try {
+      await Promise.all([
+        removeUploadedNewsletterFile(newsletter.imageUrl),
+        removeUploadedNewsletterFile(newsletter.pdfUrl),
+      ]);
+    } catch (error) {
+      console.error("Newsletter deleted, but an upload could not be removed:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Newsletter deleted, but an upload could not be removed",
+      });
+    }
+
     console.log("✅ Newsletter deleted:", req.params.id);
     
     res.json({ success: true, message: "Newsletter deleted successfully" });

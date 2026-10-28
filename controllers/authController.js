@@ -1,10 +1,13 @@
 // backend/controllers/authController.js
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
 const axios = require("axios");
 const User = require("../models/Users");
 const Alumni = require("../models/Alumni");
+const { createRegistrationPayment } = require("./membershipPaymentController");
+const { transporter } = require("../config/mailer");
 
 // Initialize OAuth clients
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -25,54 +28,21 @@ const generateToken = (user) => {
   );
 };
 
+const setAuthCookie = (res, token, maxAge = 7 * 24 * 60 * 60 * 1000) => {
+  res.clearCookie("token", { path: "/api/auth" });
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge,
+  });
+};
+
 // ══════════════════════════════════════════════════════════════════════════
 // REGISTER
 // ══════════════════════════════════════════════════════════════════════════
-const register = async (req, res) => {
-  try {
-    const { firstName, lastName, email, password } = req.body;
-
-    // Check if user exists
-    const existingUser = await Alumni.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already registered" });
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create user
-    const newUser = new Alumni({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      alumniId: req.body.alumniId,
-      isApproved: false,
-    });
-
-    await newUser.save();
-
-    res.status(201).json({
-      message: "Registration successful. Pending admin approval.",
-      user: {
-        id: newUser._id,
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        role: "alumni",
-        isApproved: newUser.isApproved,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Register error:", error);
-    res.status(500).json({
-      message: "Registration failed",
-      error: error.message,
-    });
-  }
-};
+const register = createRegistrationPayment;
 
 // ══════════════════════════════════════════════════════════════════════════
 // LOGIN (Email/Password)
@@ -82,18 +52,19 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // Validate input
-    if (!email || !password) {
+    if (typeof email !== "string" || !email.trim() || !password) {
       return res.status(400).json({
         message: "Email and password are required",
       });
     }
 
     // Check both User (admin) and Alumni tables
-    let user = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail }).select("+password");
     let isAdmin = !!user;
 
     if (!user) {
-      user = await Alumni.findOne({ email });
+      user = await Alumni.findOne({ email: normalizedEmail }).select("+password");
       if (!user) {
         return res.status(401).json({
           message: "Invalid email or password",
@@ -119,13 +90,8 @@ const login = async (req, res) => {
     // Generate JWT
     const token = generateToken(user);
 
-    // Set HttpOnly cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    // Login is under /api/auth, but the cookie must also reach /api/admin.
+    setAuthCookie(res, token);
 
     console.log(`✅ User logged in: ${user.email}`);
 
@@ -137,6 +103,7 @@ const login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: isAdmin ? user.role : "alumni",
+        isAdmin,
         isApproved: user.isApproved ?? true,
         profileImage: user.profileImage || null,
       },
@@ -265,43 +232,34 @@ const socialLogin = async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════════
     let user = await Alumni.findOne({ email: userData.email });
 
-    if (user) {
-      // Link social account to existing user
-      const socialIdField = userData.provider + "Id";
-      if (!user[socialIdField]) {
-        user[socialIdField] = userData[socialIdField];
-        if (userData.profileImage && !user.profileImage) {
-          user.profileImage = userData.profileImage;
-        }
-        await user.save();
-        console.log(
-          `✅ Linked ${userData.provider}Id to existing user:`,
-          user.email
-        );
-      }
-    } else {
-      // Create new user
-      user = new Alumni({
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        profileImage: userData.profileImage,
-        googleId:
-          userData.provider === "google"
-            ? userData.googleId
-            : null,
-        facebookId:
-          userData.provider === "facebook"
-            ? userData.facebookId
-            : null,
-        password: null, // No password for social logins
-        role: "alumni",
-        isApproved: false, // Pending admin approval
+    if (!user) {
+      return res.status(403).json({
+        message:
+          "Complete alumni registration and membership payment before using social login.",
       });
+    }
 
+    if (user.membershipPayment?.status !== "paid") {
+      return res.status(403).json({
+        message: "Membership payment must be verified before social login.",
+      });
+    }
+    if (!user.isApproved) {
+      return res.status(403).json({
+        message: "Your membership is awaiting administrator approval.",
+      });
+    }
+
+    // Link social account to an existing paid and approved member.
+    const socialIdField = userData.provider + "Id";
+    if (!user[socialIdField]) {
+      user[socialIdField] = userData[socialIdField];
+      if (userData.profileImage && !user.profileImage) {
+        user.profileImage = userData.profileImage;
+      }
       await user.save();
       console.log(
-        `✅ New user created via ${userData.provider}:`,
+        `✅ Linked ${userData.provider}Id to existing user:`,
         user.email
       );
     }
@@ -311,13 +269,7 @@ const socialLogin = async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════════
     const token = generateToken(user);
 
-    // Set HttpOnly cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    setAuthCookie(res, token);
 
     console.log(
       `✅ ${userData.provider} social login successful:`,
@@ -365,6 +317,12 @@ const getProfile = async (req, res) => {
       }
     }
 
+    const token = req.cookies?.token;
+    if (token && req.user.exp) {
+      const remainingLifetime = req.user.exp * 1000 - Date.now();
+      if (remainingLifetime > 0) setAuthCookie(res, token, remainingLifetime);
+    }
+
     res.status(200).json({
       user: {
         id: user._id,
@@ -372,6 +330,7 @@ const getProfile = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: isAdmin ? user.role : "alumni",
+        isAdmin,
         isApproved: user.isApproved ?? true,
         profileImage: user.profileImage || null,
       },
@@ -390,7 +349,8 @@ const getProfile = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 const logout = async (req, res) => {
   try {
-    res.clearCookie("token");
+    res.clearCookie("token", { path: "/api/auth" });
+    res.clearCookie("token", { path: "/" });
     res.status(200).json({
       message: "Logout successful",
     });
@@ -417,11 +377,16 @@ const changePassword = async (req, res) => {
           "Current password and new password are required",
       });
     }
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({
+        message: "New password must contain at least 8 characters",
+      });
+    }
 
     // Check both tables
-    let user = await User.findById(userId);
+    let user = await User.findById(userId).select("+password");
     if (!user) {
-      user = await Alumni.findById(userId);
+      user = await Alumni.findById(userId).select("+password");
     }
 
     if (!user) {
@@ -431,6 +396,11 @@ const changePassword = async (req, res) => {
     }
 
     // Verify current password
+    if (!user.password) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
+      });
+    }
     const isPasswordValid = await bcrypt.compare(
       currentPassword,
       user.password
@@ -461,40 +431,81 @@ const changePassword = async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 // FORGOT PASSWORD
 // ══════════════════════════════════════════════════════════════════════════
+const RESET_OTP_LIFETIME_MS = 10 * 60 * 1000;
+const RESET_OTP_MAX_ATTEMPTS = 5;
+
+const hashResetOtp = (otp) =>
+  crypto.createHash("sha256").update(otp).digest();
+
+const isResetOtpValid = (user, otp) => {
+  if (
+    !user.resetOtp ||
+    !user.resetOtpExpiry ||
+    user.resetOtpExpiry.getTime() <= Date.now() ||
+    user.resetOtpAttempts >= RESET_OTP_MAX_ATTEMPTS
+  ) {
+    return false;
+  }
+  const expected = Buffer.from(user.resetOtp, "hex");
+  const actual = hashResetOtp(otp);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+};
+
+const clearResetOtp = (user) => {
+  user.resetOtp = undefined;
+  user.resetOtpExpiry = undefined;
+  user.resetOtpAttempts = 0;
+};
+
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email) {
+    if (typeof email !== "string" || !email.trim()) {
       return res.status(400).json({
         message: "Email is required",
       });
     }
 
-    // Check both tables
-    let user = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const resetFields =
+      "+resetOtp +resetOtpExpiry +resetOtpAttempts +resetOtpSentAt";
+    let user = await User.findOne({ email: normalizedEmail }).select(resetFields);
     if (!user) {
-      user = await Alumni.findOne({ email });
+      user = await Alumni.findOne({ email: normalizedEmail }).select(resetFields);
     }
 
-    if (!user) {
-      return res.status(404).json({
-        message:
-          "If email exists, password reset link has been sent",
-      });
+    if (user) {
+      if (
+        user.resetOtpSentAt &&
+        Date.now() - user.resetOtpSentAt.getTime() < 60 * 1000
+      ) {
+        return res.status(200).json({
+          message: "If an account exists for that email, a password reset code has been sent.",
+        });
+      }
+      const otp = String(crypto.randomInt(100000, 1000000));
+      user.resetOtp = hashResetOtp(otp).toString("hex");
+      user.resetOtpExpiry = new Date(Date.now() + RESET_OTP_LIFETIME_MS);
+      user.resetOtpAttempts = 0;
+      user.resetOtpSentAt = new Date();
+      await user.save();
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: normalizedEmail,
+          subject: "PSG CAS Alumni Portal password reset code",
+          text: `Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
+        });
+      } catch (emailError) {
+        clearResetOtp(user);
+        await user.save();
+        throw emailError;
+      }
     }
-
-    // Generate OTP
-    const otp = Math.random().toString().slice(2, 8);
-    user.resetOtp = otp;
-    user.resetOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-    await user.save();
-
-    // TODO: Send OTP to email
-    console.log(`✅ OTP generated for ${email}: ${otp}`);
 
     res.status(200).json({
-      message: "OTP sent to your email",
+      message: "If an account exists for that email, a password reset code has been sent.",
     });
   } catch (error) {
     console.error("❌ Forgot password error:", error);
@@ -512,29 +523,33 @@ const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    if (!email || !otp) {
+    if (typeof email !== "string" || !email.trim() || typeof otp !== "string" || !otp.trim()) {
       return res.status(400).json({
         message: "Email and OTP are required",
       });
     }
 
     // Check both tables
-    let user = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const resetFields =
+      "+resetOtp +resetOtpExpiry +resetOtpAttempts";
+    let user = await User.findOne({ email: normalizedEmail }).select(resetFields);
     if (!user) {
-      user = await Alumni.findOne({ email });
+      user = await Alumni.findOne({ email: normalizedEmail }).select(resetFields);
     }
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
       });
     }
 
-    // Verify OTP
-    if (
-      user.resetOtp !== otp ||
-      user.resetOtpExpiry < Date.now()
-    ) {
+    if (!isResetOtpValid(user, String(otp))) {
+      if (user.resetOtp && user.resetOtpExpiry?.getTime() > Date.now()) {
+        user.resetOtpAttempts += 1;
+        if (user.resetOtpAttempts >= RESET_OTP_MAX_ATTEMPTS) clearResetOtp(user);
+        await user.save();
+      }
       return res.status(400).json({
         message: "Invalid or expired OTP",
       });
@@ -559,30 +574,45 @@ const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
-    if (!email || !otp || !newPassword) {
+    if (
+      typeof email !== "string" ||
+      !email.trim() ||
+      typeof otp !== "string" ||
+      !otp.trim() ||
+      typeof newPassword !== "string" ||
+      !newPassword
+    ) {
       return res.status(400).json({
         message:
           "Email, OTP, and new password are required",
       });
     }
-
-    // Check both tables
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = await Alumni.findOne({ email });
-    }
-
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        message: "New password must contain at least 8 characters",
       });
     }
 
-    // Verify OTP
-    if (
-      user.resetOtp !== otp ||
-      user.resetOtpExpiry < Date.now()
-    ) {
+    // Check both tables
+    const normalizedEmail = email.trim().toLowerCase();
+    const resetFields = "+resetOtp +resetOtpExpiry +resetOtpAttempts +password";
+    let user = await User.findOne({ email: normalizedEmail }).select(resetFields);
+    if (!user) {
+      user = await Alumni.findOne({ email: normalizedEmail }).select(resetFields);
+    }
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
+      });
+    }
+
+    if (!isResetOtpValid(user, String(otp))) {
+      if (user.resetOtp && user.resetOtpExpiry?.getTime() > Date.now()) {
+        user.resetOtpAttempts += 1;
+        if (user.resetOtpAttempts >= RESET_OTP_MAX_ATTEMPTS) clearResetOtp(user);
+        await user.save();
+      }
       return res.status(400).json({
         message: "Invalid or expired OTP",
       });
@@ -591,8 +621,7 @@ const resetPassword = async (req, res) => {
     // Hash and update password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-    user.resetOtp = null;
-    user.resetOtpExpiry = null;
+    clearResetOtp(user);
     await user.save();
 
     console.log(`✅ Password reset successful for:`, user.email);

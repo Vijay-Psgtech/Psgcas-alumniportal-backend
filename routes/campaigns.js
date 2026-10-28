@@ -101,7 +101,7 @@ router.put("/response/:responseId/status", async (req, res) => {
 router.post("/response/:responseId/publish", async (req, res) => {
   try {
     const { responseId } = req.params;
-    const { title } = req.body;
+    const { title } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(responseId)) {
       return res.status(400).json({
@@ -110,7 +110,7 @@ router.post("/response/:responseId/publish", async (req, res) => {
       });
     }
 
-    if (!title || title.trim() === "") {
+    if (typeof title !== "string" || title.trim() === "") {
       return res.status(400).json({
         success: false,
         message: "Title is required to publish",
@@ -122,7 +122,7 @@ router.post("/response/:responseId/publish", async (req, res) => {
       {
         status: "Published",
         isPublished: true,
-        publishedTitle: title,
+        publishedTitle: title.trim(),
         publishedAt: new Date(),
       },
       { new: true }

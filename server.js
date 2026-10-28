@@ -9,8 +9,22 @@ const connectDB    = require("./config/db");
 
 dotenv.config();
 
+const {
+  handleRegistrationPaymentResponse,
+  getMembershipFee,
+  cleanupExpiredRegistrationData,
+} = require("./controllers/membershipPaymentController");
 const app = express();
-connectDB();
+const databaseReady = connectDB().then(() => {
+  const cleanupExpiredRegistrations = () =>
+    cleanupExpiredRegistrationData().catch((error) =>
+      console.error("Expired registration cleanup failed:", error),
+    );
+  cleanupExpiredRegistrations();
+  const cleanupTimer = setInterval(cleanupExpiredRegistrations, 15 * 60 * 1000);
+  cleanupTimer.unref();
+  return true;
+});
 
 // ── Easebuzz Config (from .env) ───────────────────────────────────────────────
 const easebuzzConfig = {
@@ -30,8 +44,8 @@ const allowedOrigins = [
   "https://www.alumni.psgcas.ac.in",
 ];
 
-app.use(
-  cors({
+app.use(   
+  cors(      {
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
@@ -49,9 +63,13 @@ app.use(
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true })); // needed for Easebuzz form posts
 app.use(cookieParser());
+app.use((req, _res, next) => {
+  req.body = req.body || {};
+  next();
+});
 
 // ── Static files ──────────────────────────────────────────────────────────────
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/static",  express.static(path.join(__dirname, "assets")));
 app.use("/view",    express.static(path.join(__dirname, "views")));
 
@@ -134,6 +152,12 @@ app.post("/api/payment/response", function (req, res) {
   }
 });
 
+app.post(
+  "/api/payment/registration-response",
+  handleRegistrationPaymentResponse,
+);
+app.get("/api/payment/membership-fee", getMembershipFee);
+
 // ── POST /api/payment/webhook ─────────────────────────────────────────────────
 // Easebuzz pushes payment events here automatically (configure in dashboard)
 // Must be publicly accessible (not behind auth middleware)
@@ -205,6 +229,7 @@ app.use("/api/alumni/chapters", require("./routes/chapters"));
 
 // Alumni directory (public + protected profile update)
 app.use("/api/alumni", require("./routes/alumni"));
+app.use("/api/site-content", require("./routes/siteContent"));
 
 // Admin simple routes (approve/reject/stats)
 app.use("/api/admin", require("./routes/admin"));
@@ -256,7 +281,7 @@ app.use((err, _req, res, _next) => {
 //  START SERVER
 // ═════════════════════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+databaseReady.then(() => app.listen(PORT, () => {
   console.log(`\n🚀 PSG Alumni Backend running on port ${PORT}`);
   console.log(`📡 Available APIs:`);
   console.log(`   ✅ GET  http://localhost:${PORT}/api/health`);
@@ -271,4 +296,7 @@ app.listen(PORT, () => {
   console.log(`   ✅ POST http://localhost:${PORT}/api/payment/transaction-by-date`);
   console.log(`   ✅ POST http://localhost:${PORT}/api/payment/payout`);
   console.log(`   ✅ POST http://localhost:${PORT}/api/payment/refund`);
+})).catch((error) => {
+  console.error("Backend startup failed before MongoDB was ready:", error);
+  process.exitCode = 1;
 });

@@ -16,7 +16,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    let filter = { role: "Alumni" };
+    let filter = { role: "Alumni", "membershipPayment.status": "paid" };
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
     if (department) filter.department = department;
@@ -74,6 +74,10 @@ exports.getAllAlumniForAdmin = async (req, res) => {
 // GET /api/admin/dashboard/stats
 exports.getDashboardStats = async (req, res) => {
   try {
+    const paidMembershipFilter = {
+      role: "Alumni",
+      "membershipPayment.status": "paid",
+    };
     const [
       totalAlumni,
       approvedAlumni,
@@ -83,9 +87,9 @@ exports.getDashboardStats = async (req, res) => {
       totalEvents,
       albumsCount,
     ] = await Promise.all([
-      Alumni.countDocuments({ role: "Alumni" }),
-      Alumni.countDocuments({ isApproved: true, role: "Alumni" }),
-      Alumni.countDocuments({ isApproved: false, role: "Alumni" }),
+      Alumni.countDocuments(paidMembershipFilter),
+      Alumni.countDocuments({ ...paidMembershipFilter, isApproved: true }),
+      Alumni.countDocuments({ ...paidMembershipFilter, isApproved: false }),
       Donation.find({ status: "completed" }),
       Donation.countDocuments({ status: "pending" }),
       Event.countDocuments(),

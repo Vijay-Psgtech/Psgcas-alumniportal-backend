@@ -9,17 +9,18 @@ const {
     getNewsLettersByCategory
 } = require("../controllers/newsLetterController");
 const upload = require("../middleware/uploads");
+const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 
 router.get("/", getAllNewsLetters);
 router.get("/:id", getNewsLetterById);
 
 // ✅ FIXED v2: Using upload.any() for maximum compatibility
 // This accepts ANY file fields without needing to declare them all
-router.post("/", upload.any(), createNewsLetter);
+router.post("/", authMiddleware, adminMiddleware, upload.any(), createNewsLetter);
 
-router.put("/:id", upload.any(), updateNewsLetter);
+router.put("/:id", authMiddleware, adminMiddleware, upload.any(), updateNewsLetter);
 
-router.delete("/:id", deleteNewsLetter);
+router.delete("/:id", authMiddleware, adminMiddleware, deleteNewsLetter);
 router.get("/category/:category", getNewsLettersByCategory);
 
 module.exports = router;

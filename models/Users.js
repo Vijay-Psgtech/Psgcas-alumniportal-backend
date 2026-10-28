@@ -22,6 +22,10 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: null,  // ✅ Can be null for social logins
     },
+    resetOtp: { type: String, select: false },
+    resetOtpExpiry: { type: Date, select: false },
+    resetOtpAttempts: { type: Number, default: 0, select: false },
+    resetOtpSentAt: { type: Date, select: false },
 
     role: {
       type: String,
@@ -41,16 +45,14 @@ const UserSchema = new mongoose.Schema(
     // ✅ NEW: OAuth Fields
     googleId: {
       type: String,
-      default: null,
       unique: true,
-      sparse: true,  // Allows multiple null values
+      sparse: true,  // Unique only when an OAuth ID is present
     },
 
     facebookId: {
       type: String,
-      default: null,
       unique: true,
-      sparse: true,  // Allows multiple null values
+      sparse: true,  // Unique only when an OAuth ID is present
     },
 
     profileImage: {
