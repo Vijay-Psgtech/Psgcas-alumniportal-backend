@@ -1,152 +1,139 @@
-var util = require('./util.js');
+const util = require("./util.js");
 
-var sha512 = require('js-sha512');
-
-let initiate_payment = function (data, config, res) {
-
-  function isFloat(amt) {
-    var regexp = /^\d+\.\d{1,2}$/;
-    return regexp.test(amt)
+const initiate_payment = async function (data, config, res) {
+  const requiredFields = [
+    "name",
+    "amount",
+    "txnid",
+    "email",
+    "phone",
+    "productinfo",
+    "surl",
+    "furl",
+  ];
+  const missingField = requiredFields.find(
+    (field) =>
+      typeof data?.[field] !== "string" ||
+      data[field].trim().length === 0,
+  );
+  if (missingField) {
+    return res.status(400).json({
+      status: 0,
+      data: `Mandatory Parameter ${missingField} cannot be empty`,
+    });
   }
 
-
-  function checkArgumentValidation(data, config) {
-
-    if (!data.name.trim()) {
-      res.json({
-        "status": 0,
-        "data": "Mandatory Parameter name can not empty"
-      });
-    }
-    if (!(data.amount.trim()) || !(isFloat(data.amount))) {
-      res.json({
-        "status": 0,
-        "data": "Mandatory Parameter amount can not empty and must be in decimal "
-      });
-    }
-    if (!(data.txnid.trim())) {
-      res.json({
-        "status": 0,
-        "data": "Merchant Transaction validation failed. Please enter proper value for merchant txn"
-      });
-    }
-    if (!(data.email.trim()) || !(util.validate_mail(data.email))) {
-      res.json({
-        "status": 0,
-        "data": "Email validation failed. Please enter proper value for email"
-      });
-    }
-    if (!(data.phone.trim()) || util.validate_phone(data.phone)) {
-      res.json({
-        "status": 0,
-        "data": "Phone validation failed. Please enter proper value for phone"
-      });
-    }
-    if (!(data.productinfo.trim())) {
-      res.json({
-        "status": 0,
-        "data": "Mandatory Parameter Product info cannot be empty"
-      });
-    }
-    if (!(data.surl.trim()) || !(data.furl.trim())) {
-      res.json({
-        "status": 0,
-        "data": "Mandatory Parameter Surl/Furl cannot be empty"
-      });
-    }
+  if (!/^\d+\.\d{1,2}$/.test(data.amount) || Number(data.amount) <= 0) {
+    return res.status(400).json({
+      status: 0,
+      data: "Amount must be greater than zero and have up to two decimal places",
+    });
+  }
+  if (!util.validate_mail(data.email)) {
+    return res.status(400).json({
+      status: 0,
+      data: "Email validation failed",
+    });
+  }
+  if (!util.validate_phone(data.phone)) {
+    return res.status(400).json({
+      status: 0,
+      data: "Phone validation failed",
+    });
   }
 
-  function geturl(env) {
-    if (env == 'test') {
-      url_link = "https://testpay.easebuzz.in/";
-
-    } else if (env == 'prod') {
-      url_link = 'https://pay.easebuzz.in/';
-    } else {
-      url_link = "https://testpay.easebuzz.in/";
-    }
-    return url_link;
+  let baseUrl;
+  if (config.env === "prod") {
+    baseUrl = "https://pay.easebuzz.in/";
+  } else if (config.env === "test") {
+    baseUrl = "https://testpay.easebuzz.in/";
+  } else {
+    return res.status(503).json({
+      status: 0,
+      message: "Payment environment is not supported",
+    });
   }
 
-  function form() {
-    form = {
-      'key': config.key,
-      'txnid': data.txnid,
-      'amount': data.amount,
-      'email': data.email,
-      'phone': data.phone,
-      'firstname': data.name,
-      'udf1': data.udf1,
-      'udf2': data.udf2,
-      'udf3': data.udf3,
-      'udf4': data.udf4,
-      'udf5': data.udf5,
-      'hash': hash_key,
-      'productinfo': data.productinfo,
-      'udf6': data.udf6,
-      'udf7': data.udf7,
-      'udf8': data.udf8,
-      'udf9': data.udf9,
-      'udf10': data.udf10,
-      'furl': data.furl, //'http://localhost:3000/response',
-      'surl': data.surl, //'http://localhost:3000/response'
-    }
-    if (data.unique_id != '') {
-      form.unique_id = data.unique_id
-    }
-
-
-    if (data.split_payments != '') {
-      form.split_payments = data.split_payments
-    }
-
-    if (data.sub_merchant_id != '') {
-      form.sub_merchant_id = data.sub_merchant_id
-    }
-
-    if (data.customer_authentication_id != '') {
-      form.customer_authentication_id = data.customer_authentication_id
-    }
-
-    return form;
+  if (!config.key || !config.salt) {
+    return res.status(503).json({
+      status: 0,
+      message: "Payment gateway is not configured",
+    });
   }
 
-  // main calling part is below
-
-  checkArgumentValidation(data, config);
-  var hash_key = generateHash();
-  payment_url = geturl(config.env);
-  call_url = payment_url + 'payment/initiateLink';
-  util.call(call_url, form()).then(function (response) {
-    pay(response.data, payment_url)
-  });
-
-
-  function pay(access_key, url_main) {
-    
-    if (config.enable_iframe==0) {
-      var url = url_main + 'pay/' + access_key;
-      return res.redirect(url);
-    } else {
-
-      res.render("enable_iframe.html", {
-        'key': config.key,
-        'access_key': access_key
+  for (const field of ["surl", "furl"]) {
+    try {
+      const callbackUrl = new URL(data[field]);
+      if (!["http:", "https:"].includes(callbackUrl.protocol)) {
+        throw new Error("Unsupported callback protocol");
+      }
+    } catch {
+      return res.status(400).json({
+        status: 0,
+        data: `${field} must be a valid HTTP or HTTPS URL`,
       });
-
     }
   }
 
+  const udfFields = Array.from({ length: 10 }, (_, index) => `udf${index + 1}`);
+  const paymentData = {
+    key: config.key,
+    txnid: data.txnid,
+    amount: data.amount,
+    email: data.email,
+    phone: data.phone,
+    firstname: data.name,
+    productinfo: data.productinfo,
+    ...Object.fromEntries(udfFields.map((field) => [field, data[field] || ""])),
+    surl: data.surl,
+    furl: data.furl,
+  };
+  paymentData.hash = util.generateHash(
+    { ...paymentData, name: data.name },
+    config,
+  );
 
-  function generateHash() {
-
-    var hashstring = config.key + "|" + data.txnid + "|" + data.amount + "|" + data.productinfo + "|" + data.name + "|" + data.email +
-      "|" + data.udf1 + "|" + data.udf2 + "|" + data.udf3 + "|" + data.udf4 + "|" + data.udf5 + "|" + data.udf6 + "|" + data.udf7 + "|" + data.udf8 + "|" + data.udf9 + "|" + data.udf10;
-    hashstring += "|" + config.salt;
-    data.hash = sha512.sha512(hashstring);
-    return (data.hash);
+  for (const field of [
+    "unique_id",
+    "split_payments",
+    "sub_merchant_id",
+    "customer_authentication_id",
+  ]) {
+    if (typeof data[field] === "string" && data[field]) {
+      paymentData[field] = data[field];
+    }
   }
 
-}
+  try {
+    const response = await util.call(
+      `${baseUrl}payment/initiateLink`,
+      paymentData,
+    );
+    if (typeof response.data !== "string" || !response.data.trim()) {
+      console.error("Easebuzz returned an invalid payment access key");
+      return res.status(502).json({
+        status: 0,
+        message: "Payment gateway returned an invalid response",
+      });
+    }
+
+    if (config.enable_iframe === 0 || config.enable_iframe === "0") {
+      return res.redirect(
+        `${baseUrl}pay/${encodeURIComponent(response.data)}`,
+      );
+    }
+
+    return res.render("enable_iframe.html", {
+      key: config.key,
+      access_key: response.data,
+    });
+  } catch (error) {
+    console.error("Easebuzz payment initiation failed:", error.message);
+    return res.status(502).json({
+      status: 0,
+      message: "Unable to initiate payment",
+    });
+  }
+};
 
 exports.initiate_payment = initiate_payment;

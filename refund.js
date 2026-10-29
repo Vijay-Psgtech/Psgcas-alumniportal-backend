@@ -13,7 +13,7 @@ let refund = function (data, config, res) {
             "status": 0,
             "data": "Mandatory Parameter email can not empty"
           });
-        }
+        }  
         if (!(data.phone.trim())) {
           res.json({
             "status": 0,

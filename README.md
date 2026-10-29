@@ -66,11 +66,16 @@ imports using that same column order:
 `Contact Number`, `Complete Postal Address`, `Current Designation`,
 `Organization/Institution/Company`, `Professional Location`.
 
-Import rows require a transaction reference, receipt number, transaction date,
-name, batch, department, email, contact number, postal address, designation, and
-organization. CSV imports are restricted to super-admins. Imported legacy payments
-are marked `imported-admin-attested` (not gateway-verified) and remain subject to
-admin approval; re-imports do not overwrite Easebuzz-verified payment records.
+Import rows require a name, batch, department, email, contact number, and postal
+address. Historical payment references, receipts, and dates may be blank. CSV
+imports are restricted to super-admins. Imported legacy payments are marked
+`imported-admin-attested` (not gateway-verified) and remain subject to admin
+approval; re-imports do not overwrite Easebuzz-verified payment records.
+
+Legacy alumni exports are also supported: `Year of Joining` with `Year of
+Graduation`, `Course/Degree`, `E-mail`, `Phone`, and either `Permanent Residence`
+or `Current Residence` are recognized. `Current City` and `Current Country` are
+imported as address details.
 
 ## Admin self-service
 
@@ -85,4 +90,13 @@ minutes, and are limited to five verification attempts. Configure `EMAIL_USER` a
 
 - **Admin** – admin users  
 - **Alumni** – alumni records  
-- **Donation** – donation entries  
+- **Donation** – donation entries
+
+## Validation
+
+Run `npm test` to execute the backend utility regression tests.
+
+Department-admin alumni access is restricted to the department on the admin's
+signed-in account; admins should sign in again after this authorization change so
+their session token includes that department. Payment lookup, payout, and refund
+operations require an authenticated super-admin account.

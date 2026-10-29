@@ -41,7 +41,17 @@ exports.exportPaidAlumniCsv = async (req, res) => {
       role: "Alumni",
       "membershipPayment.status": "paid",
     };
-    if (req.query.department) filter.department = req.query.department;
+    if (req.adminDepartment) {
+      if (
+        req.query.department &&
+        req.query.department !== req.adminDepartment
+      ) {
+        return res.status(403).json({ message: "Department access denied" });
+      }
+      filter.department = req.adminDepartment;
+    } else if (req.query.department) {
+      filter.department = req.query.department;
+    }
     if (req.query.batchYear) filter.batchYear = req.query.batchYear;
     if (req.query.search) {
       const search = String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -130,10 +140,12 @@ exports.exportPaidAlumniCsv = async (req, res) => {
   }
 };
 
-exports.findAlumniDuplicates = async (_req, res) => {
+exports.findAlumniDuplicates = async (req, res) => {
   try {
+    const match = { role: "Alumni", "membershipPayment.status": "paid" };
+    if (req.adminDepartment) match.department = req.adminDepartment;
     const duplicates = await Alumni.aggregate([
-      { $match: { role: "Alumni", "membershipPayment.status": "paid" } },
+      { $match: match },
       {
         $group: {
           _id: {
@@ -229,7 +241,21 @@ exports.updateAlumniByAdmin = async (req, res) => {
       updates.studyEndYear = educationHistory[0].studyEndYear;
       updates.batchYear = educationHistory[0].studyEndYear;
     }
-    const alumni = await Alumni.findByIdAndUpdate(req.params.id, updates, {
+    if (
+      req.adminDepartment &&
+      Object.prototype.hasOwnProperty.call(updates, "department") &&
+      (typeof updates.department !== "string" ||
+        updates.department.trim() !== req.adminDepartment)
+    ) {
+      return res.status(403).json({ message: "Department access denied" });
+    }
+    const filter = {
+      _id: req.params.id,
+      role: "Alumni",
+      "membershipPayment.status": "paid",
+    };
+    if (req.adminDepartment) filter.department = req.adminDepartment;
+    const alumni = await Alumni.findOneAndUpdate(filter, updates, {
       new: true,
       runValidators: true,
     }).select("-password");
@@ -243,7 +269,13 @@ exports.updateAlumniByAdmin = async (req, res) => {
 
 exports.deleteAlumniByAdmin = async (req, res) => {
   try {
-    const alumni = await Alumni.findByIdAndDelete(req.params.id);
+    const filter = {
+      _id: req.params.id,
+      role: "Alumni",
+      "membershipPayment.status": "paid",
+    };
+    if (req.adminDepartment) filter.department = req.adminDepartment;
+    const alumni = await Alumni.findOneAndDelete(filter);
     if (!alumni) return res.status(404).json({ message: "Alumni not found" });
     return res.json({ message: "Alumni record deleted successfully" });
   } catch (error) {
@@ -371,6 +403,9 @@ const csvHeaderAliases = {
     "programme",
     "program",
     "department/subject",
+    "course/degree",
+    "course degree",
+    "course",
   ],
   "Email Address": ["email", "email id", "email address"],
   "Contact Number": ["phone", "mobile", "contact", "phone number", "contact number"],
@@ -380,6 +415,8 @@ const csvHeaderAliases = {
     "postal address",
     "residential address",
     "complete postal address",
+    "permanent residence",
+    "current residence",
   ],
   "Current Designation": [
     "designation",
@@ -401,6 +438,7 @@ const csvHeaderAliases = {
     "professional location",
     "office location",
     "work location",
+    "current office",
     "location",
   ],
   "Postal Address Line 1": ["address line 1", "postal address line 1", "line1"],
@@ -481,7 +519,13 @@ exports.importPaidAlumniCsv = async (req, res) => {
     if (
       indexOf("Batch Details") < 0 &&
       !(hasHeader("Year of Joining", "Joining Year", "Study Start Year") &&
-        hasHeader("Year of Completion", "Completion Year", "Study End Year"))
+        hasHeader(
+          "Year of Completion",
+          "Completion Year",
+          "Study End Year",
+          "Year of Graduation",
+          "Graduation Year",
+        ))
     ) {
       missingHeaders.push("Batch Details (or joining and completion years)");
     }
@@ -530,6 +574,8 @@ exports.importPaidAlumniCsv = async (req, res) => {
         "Year of Completion",
         "Completion Year",
         "Study End Year",
+        "Year of Graduation",
+        "Graduation Year",
       );
       const sourceBatch = get("Batch Details");
       const batchDetails =
@@ -540,7 +586,14 @@ exports.importPaidAlumniCsv = async (req, res) => {
             ? `${joiningYear}-${completionYear || sourceBatch}`
             : sourceBatch;
       const departmentValue =
-        getRaw("Department/Subject", "Subject") ||
+        getRaw(
+          "Department/Subject",
+          "Subject",
+          "Course/Degree",
+          "Course",
+          "Programme",
+          "Program",
+        ) ||
         [getRaw("Department"), getRaw("Degree")]
           .filter(Boolean)
           .join(" / ");
@@ -596,12 +649,15 @@ exports.importPaidAlumniCsv = async (req, res) => {
         : undefined;
       const email = get("Email Address").toLowerCase();
       const postalAddressDetails = {
-        line1: get("Postal Address Line 1") || postalAddress,
+        line1:
+          get("Postal Address Line 1") ||
+          getRaw("Permanent Residence", "Current Residence") ||
+          postalAddress,
         line2: get("Postal Address Line 2"),
-        city: get("City"),
+        city: getRaw("City", "Current City"),
         state: get("State"),
         pincode: get("PIN Code"),
-        country: get("Country"),
+        country: getRaw("Country", "Current Country"),
       };
       const professionalAddress = {
         line1: professionalLocation,

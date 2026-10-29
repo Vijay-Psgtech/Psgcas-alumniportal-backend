@@ -542,10 +542,12 @@ exports.handleRegistrationPaymentResponse = async (req, res) => {
 
 exports.resendMembershipReceipt = async (req, res) => {
   try {
-    const alumni = await Alumni.findOne({
+    const filter = {
       _id: req.params.id,
       "membershipPayment.status": "paid",
-    });
+    };
+    if (req.adminDepartment) filter.department = req.adminDepartment;
+    const alumni = await Alumni.findOne(filter);
     if (!alumni) return res.status(404).json({ message: "Paid member not found" });
     await sendReceipt(alumni);
     alumni.membershipPayment.receiptEmailStatus = "sent";

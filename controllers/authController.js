@@ -22,6 +22,7 @@ const generateToken = (user) => {
       id: user._id,
       email: user.email,
       role: user.role || "alumni",
+      department: user.role === "admin" ? user.department : undefined,
     },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
@@ -103,6 +104,7 @@ const login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: isAdmin ? user.role : "alumni",
+        department: isAdmin ? user.department : undefined,
         isAdmin,
         isApproved: user.isApproved ?? true,
         profileImage: user.profileImage || null,

@@ -2,10 +2,11 @@ const express      = require("express");
 const cors         = require("cors");
 const cookieParser = require("cookie-parser");
 const dotenv       = require("dotenv");
-const crypto       = require("crypto");
 const path         = require("path");
 const bodyParser   = require("body-parser");
 const connectDB    = require("./config/db");
+const { authMiddleware, superAdminMiddleware } = require("./middleware/auth");
+const util = require("./util");
 
 dotenv.config();
 
@@ -43,7 +44,7 @@ const allowedOrigins = [
   "https://alumni.psgcas.ac.in",
   "https://www.alumni.psgcas.ac.in",
 ];
-
+  
 app.use(   
   cors(      {
     origin: (origin, callback) => {
@@ -81,37 +82,6 @@ app.set("view engine", "ejs");
 //  EASEBUZZ PAYMENT GATEWAY ROUTES
 // ═════════════════════════════════════════════════════════════════════════════
 
-// ── Helper: Reverse hash verification ────────────────────────────────────────
-function verifyEasebuzzHash(response, salt) {
-  const hashString = [
-    salt,
-    response.status,
-    response.udf10 || "",
-    response.udf9  || "",
-    response.udf8  || "",
-    response.udf7  || "",
-    response.udf6  || "",
-    response.udf5  || "",
-    response.udf4  || "",
-    response.udf3  || "",
-    response.udf2  || "",
-    response.udf1  || "",
-    response.email,
-    response.firstname,
-    response.productinfo,
-    response.amount,
-    response.txnid,
-    response.key,
-  ].join("|");
-
-  const calculatedHash = crypto
-    .createHash("sha512")
-    .update(hashString)
-    .digest("hex");
-
-  return calculatedHash === response.hash;
-}
-
 // ── POST /api/payment/initiate ────────────────────────────────────────────────
 // Initiates a new Easebuzz payment, returns access_key to redirect user
 app.post("/api/payment/initiate", function (req, res) {
@@ -126,7 +96,13 @@ app.post("/api/payment/initiate", function (req, res) {
 app.post("/api/payment/response", function (req, res) {
   const response = req.body;
 
-  if (!verifyEasebuzzHash(response, easebuzzConfig.salt)) {
+  if (
+    !util.verify_easebuzz_hash(
+      response,
+      easebuzzConfig.salt,
+      easebuzzConfig.key,
+    )
+  ) {
     console.error("❌ Easebuzz hash mismatch — possible tampering");
     return res.status(400).json({
       success: false,
@@ -140,14 +116,15 @@ app.post("/api/payment/response", function (req, res) {
     return res.status(200).json({
       success: true,
       message: "Payment successful",
-      data: response,
+      transactionId: response.txnid,
     });
   } else {
     console.warn("⚠️ Payment failed/pending:", response.txnid, response.status);
     return res.status(200).json({
       success: false,
       message: "Payment failed or pending",
-      data: response,
+      transactionId: response.txnid,
+      status: response.status,
     });
   }
 });
@@ -164,7 +141,13 @@ app.get("/api/payment/membership-fee", getMembershipFee);
 app.post("/api/payment/webhook", function (req, res) {
   const payload = req.body;
 
-  if (!verifyEasebuzzHash(payload, easebuzzConfig.salt)) {
+  if (
+    !util.verify_easebuzz_hash(
+      payload,
+      easebuzzConfig.salt,
+      easebuzzConfig.key,
+    )
+  ) {
     console.error("❌ Webhook hash mismatch — ignoring");
     return res.status(400).json({ success: false, message: "Hash mismatch" });
   }
@@ -179,35 +162,55 @@ app.post("/api/payment/webhook", function (req, res) {
 
 // ── POST /api/payment/transaction ────────────────────────────────────────────
 // Check status of a specific transaction by txnid
-app.post("/api/payment/transaction", function (req, res) {
-  const data = req.body;
-  const transaction = require("./transaction.js");
-  transaction.transaction(data, easebuzzConfig, res);
-});
+app.post(
+  "/api/payment/transaction",
+  authMiddleware,
+  superAdminMiddleware,
+  function (req, res) {
+    const data = req.body;
+    const transaction = require("./transaction.js");
+    transaction.transaction(data, easebuzzConfig, res);
+  },
+);
 
 // ── POST /api/payment/transaction-by-date ────────────────────────────────────
 // Fetch all transactions for a given date
-app.post("/api/payment/transaction-by-date", function (req, res) {
-  const data = req.body;
-  const transaction_date = require("./tranaction_date.js");
-  transaction_date.tranaction_date(data, easebuzzConfig, res);
-});
+app.post(
+  "/api/payment/transaction-by-date",
+  authMiddleware,
+  superAdminMiddleware,
+  function (req, res) {
+    const data = req.body;
+    const transaction_date = require("./tranaction_date.js");
+    transaction_date.tranaction_date(data, easebuzzConfig, res);
+  },
+);
 
 // ── POST /api/payment/payout ──────────────────────────────────────────────────
 // Fetch payout/settlement details for a given date
-app.post("/api/payment/payout", function (req, res) {
-  const data = req.body;
-  const payout = require("./payout.js");
-  payout.payout(data, easebuzzConfig, res);
-});
+app.post(
+  "/api/payment/payout",
+  authMiddleware,
+  superAdminMiddleware,
+  function (req, res) {
+    const data = req.body;
+    const payout = require("./payout.js");
+    payout.payout(data, easebuzzConfig, res);
+  },
+);
 
 // ── POST /api/payment/refund ──────────────────────────────────────────────────
 // Initiate a refund for a transaction
-app.post("/api/payment/refund", function (req, res) {
-  const data = req.body;
-  const refund = require("./refund.js");
-  refund.refund(data, easebuzzConfig, res);
-});
+app.post(
+  "/api/payment/refund",
+  authMiddleware,
+  superAdminMiddleware,
+  function (req, res) {
+    const data = req.body;
+    const refund = require("./refund.js");
+    refund.refund(data, easebuzzConfig, res);
+  },
+);
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  PSG ALUMNI BACKEND ROUTES

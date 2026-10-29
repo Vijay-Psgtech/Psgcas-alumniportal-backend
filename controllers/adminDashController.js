@@ -19,7 +19,14 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     let filter = { role: "Alumni", "membershipPayment.status": "paid" };
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
-    if (department) filter.department = department;
+    if (req.adminDepartment) {
+      if (department && department !== req.adminDepartment) {
+        return res.status(403).json({ message: "Department access denied" });
+      }
+      filter.department = req.adminDepartment;
+    } else if (department) {
+      filter.department = department;
+    }
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
     if (search) {
       filter.$or = [
