@@ -9,6 +9,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
   try {
     const {
       status,
+      membershipStatus,
       search,
       department,
       batchYear,
@@ -20,6 +21,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     let filter = { role: "Alumni" };
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
+    if (membershipStatus) filter.membershipStatus = membershipStatus;
     if (department) filter.department = department;
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
     if (search) {
