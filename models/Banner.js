@@ -22,7 +22,11 @@ const bannerSchema = new mongoose.Schema(
     },
     backgroundImage: {
       type: String,
+<<<<<<< ours
       default: "https://via.placeholder.com/1600x900",
+=======
+      default: "",
+>>>>>>> theirs
     },
     features: [
       {
@@ -72,14 +76,21 @@ const bannerSchema = new mongoose.Schema(
 bannerSchema.index({ isActive: 1, createdAt: -1 });
 
 // Pre-save hook to ensure only one active banner
+<<<<<<< ours
 bannerSchema.pre("save", async function (next) {
+=======
+bannerSchema.pre("save", async function () {
+>>>>>>> theirs
   if (this.isActive) {
     await mongoose.model("Banner").updateMany(
       { _id: { $ne: this._id } },
       { isActive: false }
     );
   }
+<<<<<<< ours
   next();
+=======
+>>>>>>> theirs
 });
 
 module.exports = mongoose.model("Banner", bannerSchema);

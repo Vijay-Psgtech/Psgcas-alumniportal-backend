@@ -20,8 +20,13 @@ router.get("/batch-wise", getAlumniBatchWise);
 router.get("/batch-group", getAlumniGroupedByBatch);
 router.get("/batches",batches);
 router.get("/stats", getAlumniStats);
+<<<<<<< ours
 router.get("/map/data", getMapData);
 router.get("/filters", getAlumniFilters);
+=======
+router.get("/map/data", authMiddleware, getMapData);
+router.get("/distinct-dept-batch", getDistinctDeptandBatch);
+>>>>>>> theirs
 router.get("/:id", getAlumniById);
 router.put(
   "/:id",

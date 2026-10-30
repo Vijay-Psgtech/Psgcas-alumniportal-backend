@@ -1,4 +1,33 @@
 const Event = require("../models/Events");
+const fs = require("fs/promises");
+const path = require("path");
+
+const removeUploadedEventImage = async (imagePath) => {
+  const normalizedPath = imagePath?.replace(/\\/g, "/");
+  const prefix = "uploads/events/";
+  if (!normalizedPath?.startsWith(prefix)) return;
+
+  const root = path.resolve(__dirname, "..", "uploads", "events");
+  const target = path.resolve(root, normalizedPath.slice(prefix.length));
+  if (!target.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Invalid event image path");
+  }
+
+  try {
+    await fs.unlink(target);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+};
+
+const cleanupRequestImage = async (req) => {
+  if (!req.file?.path) return;
+  try {
+    await removeUploadedEventImage(req.file.path);
+  } catch (error) {
+    console.error("Could not remove unreferenced event image:", error);
+  }
+};
 
 exports.getAllEvents = async (req, res) => {
   try {
@@ -57,6 +86,7 @@ exports.createEvent = async (req, res) => {
     } = req.body;
 
     if (!title || !date || !venue) {
+      await cleanupRequestImage(req);
       return res
         .status(400)
         .json({ success: false, message: "Missing required fields" });
@@ -86,6 +116,7 @@ exports.createEvent = async (req, res) => {
     const savedEvent = await newEvent.save();
     res.status(201).json({ success: true, data: savedEvent });
   } catch (error) {
+    await cleanupRequestImage(req);
     console.error("Error creating event:", error);
     res.status(500).json({ success: false, message: "Failed to create event" });
   }
@@ -131,20 +162,37 @@ exports.updateEvent = async (req, res) => {
       updateData.imageUrl = req.file.path.replace(/\\/g, "/");
     }
 
-    const updatedEvent = await Event.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true },
-    );
+    const event = await Event.findById(req.params.id);
 
-    if (!updatedEvent) {
+    if (!event) {
+      await cleanupRequestImage(req);
       return res
         .status(404)
         .json({ success: false, message: "Event not found" });
     }
 
-    res.json({ success: true, data: updatedEvent });
+    const previousImage = event.imageUrl;
+    Object.assign(event, updateData);
+    if (req.file) {
+      event.imageUrl = req.file.path.replace(/\\/g, "/");
+    }
+
+    const updatedEvent = await event.save();
+    if (req.file && previousImage !== updatedEvent.imageUrl) {
+      try {
+        await removeUploadedEventImage(previousImage);
+      } catch (error) {
+        console.error("Event updated, but the replaced image could not be removed:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Event updated, but the replaced image could not be removed",
+        });
+      }
+    }
+
+    return res.json({ success: true, data: updatedEvent });
   } catch (error) {
+    await cleanupRequestImage(req);
     console.error("Error updating event:", error);
     res.status(500).json({ success: false, message: "Failed to update event" });
   }
@@ -152,12 +200,23 @@ exports.updateEvent = async (req, res) => {
 
 exports.deleteEvent = async (req, res) => {
   try {
-    const deletedEvent = await Event.findByIdAndDelete(req.params.id);
+    const deletedEvent = await Event.findById(req.params.id);
 
     if (!deletedEvent) {
       return res
         .status(404)
         .json({ success: false, message: "Event not found" });
+    }
+
+    await deletedEvent.deleteOne();
+    try {
+      await removeUploadedEventImage(deletedEvent.imageUrl);
+    } catch (error) {
+      console.error("Event deleted, but its image could not be removed:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Event deleted, but its image could not be removed",
+      });
     }
 
     res.json({ success: true, message: "Event deleted successfully" });

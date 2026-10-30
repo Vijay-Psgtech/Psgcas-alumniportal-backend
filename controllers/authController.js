@@ -1,285 +1,117 @@
 // backend/controllers/authController.js
-const User = require("../models/Users");
-const Alumni = require("../models/Alumni");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
+const axios = require("axios");
+const User = require("../models/Users");
+const Alumni = require("../models/Alumni");
+const { createRegistrationPayment } = require("./membershipPaymentController");
 const { transporter } = require("../config/mailer");
 
-// In-memory OTP store: { email: { otp, expiresAt } }
-// In production replace with Redis or a DB collection
-const otpStore = new Map();
+// Initialize OAuth clients
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const FACEBOOK_VERIFY_URL = "https://graph.facebook.com/me";
 
-// ─── Helper: cookie options ──────────────────────────────────────
-const COOKIE_OPTIONS = {
-  httpOnly: true, // JS cannot access
-  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-  sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (ms)
+// ══════════════════════════════════════════════════════════════════════════
+// HELPER: Generate JWT Token
+// ══════════════════════════════════════════════════════════════════════════
+const generateToken = (user) => {
+  return jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+      role: user.role || "alumni",
+      department: user.role === "admin" ? user.department : undefined,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 };
 
-// ─── Helper: generate JWT ────────────────────────────────────────
-const generateToken = (payload) =>
-  jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: "1d",
+const setAuthCookie = (res, token, maxAge = 7 * 24 * 60 * 60 * 1000) => {
+  res.clearCookie("token", { path: "/api/auth" });
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge,
   });
-
-// @route   POST /api/auth/register
-exports.register = async (req, res) => {
-  try {
-    const {
-      firstName,
-      lastName,
-      email,
-      password,
-      phone,
-      rollNumber,
-      gender,
-      occupation,
-      department,
-      programmeType,
-      degree,
-      batchYear,
-      studyStartYear,
-      studyEndYear,
-      jobTitle,
-      currentCompany,
-      industry,
-      officeContact,
-      linkedin,
-      twitter,
-      instagram,
-      facebook,
-      website,
-      city,
-      country,
-      fullAddress,
-    } = req.body;
-
-    if (!firstName || !email || !password) {
-      return res.status(400).json({
-        message: "Required fields missing",
-      });
-    }
-
-    const existingAlumni = await Alumni.findOne({
-      email: email.toLowerCase(),
-    });
-
-    if (existingAlumni) {
-      return res.status(400).json({
-        message: "Email already registered",
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const coordinates = req.body.coordinates
-      ? JSON.parse(req.body.coordinates)
-      : [0, 0];
-
-    const officeAddress = req.body.officeAddress
-      ? JSON.parse(req.body.officeAddress)
-      : {};
-
-    const files = {
-      businessCard: req.files?.businessCard?.[0]
-        ? `alumni/${req.alumniId}/${req.files.businessCard[0].filename}`
-        : null,
-
-      idCard: req.files?.idCard?.[0]
-        ? `alumni/${req.alumniId}/${req.files.idCard[0].filename}`
-        : null,
-
-      entrepreneurPoster: req.files?.entrepreneurPoster?.[0]
-        ? `alumni/${req.alumniId}/${req.files.entrepreneurPoster[0].filename}`
-        : null,
-
-      studentPhoto: req.files?.studentPhoto?.[0]
-        ? `alumni/${req.alumniId}/${req.files.studentPhoto[0].filename}`
-        : null,
-
-      currentPhoto: req.files?.currentPhoto?.[0]
-        ? `alumni/${req.alumniId}/${req.files.currentPhoto[0].filename}`
-        : null,
-    };
-
-    const newAlumni = await Alumni.create({
-      alumniId: req.alumniId,
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      phone,
-      rollNumber,
-      gender,
-      occupation,
-
-      department,
-      programmeType,
-      degree,
-      batchYear,
-      studyStartYear,
-      studyEndYear,
-
-      jobTitle,
-      currentCompany,
-      industry,
-      officeContact,
-      officeAddress,
-
-      social: {
-        linkedin,
-        twitter,
-        instagram,
-        facebook,
-        website,
-      },
-
-      city,
-      country,
-      fullAddress,
-
-      location: {
-        type: "Point",
-        coordinates,
-      },
-
-      files,
-
-      isApproved: false,
-      isAdmin: false,
-    });
-
-    const token = generateToken({
-      id: newAlumni._id,
-      email: newAlumni.email,
-      role: "alumni",
-      type: "alumni",
-    });
-
-    res.cookie("token", token, COOKIE_OPTIONS);
-
-    res.status(201).json({
-      message: "Registration successful! Waiting for admin approval.",
-      alumni: {
-        _id: newAlumni._id,
-        alumniId: newAlumni.alumniId,
-        firstName: newAlumni.firstName,
-        lastName: newAlumni.lastName,
-        email: newAlumni.email,
-        role: newAlumni.role,
-        isApproved: newAlumni.isApproved,
-      },
-    });
-  } catch (error) {
-    console.error("Register Error:", error);
-
-    res.status(500).json({
-      message: "Registration failed",
-      error: error.message,
-    });
-  }
 };
 
-// @route   POST /api/auth/login
-exports.login = async (req, res) => {
+// ══════════════════════════════════════════════════════════════════════════
+// REGISTER
+// ══════════════════════════════════════════════════════════════════════════
+const register = createRegistrationPayment;
+
+// ══════════════════════════════════════════════════════════════════════════
+// LOGIN (Email/Password)
+// ══════════════════════════════════════════════════════════════════════════
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    // Validate input
+    if (typeof email !== "string" || !email.trim() || !password) {
       return res.status(400).json({
-        message: "Email and password required",
+        message: "Email and password are required",
       });
     }
 
-    // ===============================
-    // 1. Check Admin Users First
-    // ===============================
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-    }).select("+password");
+    // Check both User (admin) and Alumni tables
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail }).select("+password");
+    let isAdmin = !!user;
 
-    if (user) {
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-
-      if (!isPasswordValid) {
+    if (!user) {
+      user = await Alumni.findOne({ email: normalizedEmail }).select("+password");
+      if (!user) {
         return res.status(401).json({
           message: "Invalid email or password",
         });
       }
-
-      const token = generateToken({
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        type: "user",
-      });
-
-      res.cookie("token", token, COOKIE_OPTIONS);
-
-      return res.json({
-        message: "Admin login successful",
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          department: user.department,
-          isAdmin: true,
-          isApproved: user.isActive,
-        },
-      });
     }
 
-    // ===============================
-    // 2. Check Alumni
-    // ===============================
-    const alumni = await Alumni.findOne({
-      email: email.toLowerCase(),
-    }).select("+password");
-
-    if (!alumni) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, alumni.password);
-
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({
         message: "Invalid email or password",
       });
     }
 
-    const token = generateToken({
-      id: alumni._id,
-      email: alumni.email,
-      role: "alumni",
-      type: "alumni",
-    });
+    // Check if alumni is approved (for alumni only)
+    if (!isAdmin && !user.isApproved) {
+      return res.status(403).json({
+        message: "Your account is pending admin approval",
+      });
+    }
 
-    res.cookie("token", token, COOKIE_OPTIONS);
+    // Generate JWT
+    const token = generateToken(user);
 
-    res.json({
-      message: alumni.isApproved
-        ? "Login successful"
-        : "Login successful. Awaiting admin approval.",
+    // Login is under /api/auth, but the cookie must also reach /api/admin.
+    setAuthCookie(res, token);
 
+    console.log(`✅ User logged in: ${user.email}`);
+
+    res.status(200).json({
+      message: "Login successful",
       user: {
-        _id: alumni._id,
-        firstName: alumni.firstName,
-        lastName: alumni.lastName,
-        email: alumni.email,
-        role: "alumni",
-        isApproved: alumni.isApproved,
-        isAdmin: false,
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: isAdmin ? user.role : "alumni",
+        department: isAdmin ? user.department : undefined,
+        isAdmin,
+        isApproved: user.isApproved ?? true,
+        profileImage: user.profileImage || null,
       },
     });
   } catch (error) {
-    console.error("Login Error:", error);
-
+    console.error("❌ Login error:", error);
     res.status(500).json({
       message: "Login failed",
       error: error.message,
@@ -287,222 +119,535 @@ exports.login = async (req, res) => {
   }
 };
 
-// @route   GET /api/auth/profile
-exports.getProfile = async (req, res) => {
+// ══════════════════════════════════════════════════════════════════════════
+// SOCIAL LOGIN (Google & Facebook)
+// ══════════════════════════════════════════════════════════════════════════
+const socialLogin = async (req, res) => {
   try {
-    const { id, type, role } = req.user;
+    const { provider, idToken, accessToken } = req.body;
 
-    let profile;
-
-    if (type === "user") {
-      profile = await User.findById(id).select("-password");
-      return res.json({
-        success: true,
-        user: {
-          ...profile.toObject(),
-          isAdmin: true,
-          isApproved: profile.isActive,
-        },
-      });
-    } else {
-      profile = await Alumni.findById(id).select("-password");
-      return res.json({
-        success: true,
-        user: {
-          ...profile.toObject(),
-          role: "alumni",
-          isAdmin: false,
-        },
+    if (!provider) {
+      return res.status(400).json({
+        message: "Provider is required",
       });
     }
+
+    let userData;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GOOGLE VERIFICATION
+    // ═══════════════════════════════════════════════════════════════════════
+    if (provider === "google") {
+      if (!idToken) {
+        return res.status(400).json({
+          message: "No ID token provided",
+        });
+      }
+
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const nameParts = (payload.name || "").split(" ");
+
+        userData = {
+          email: payload.email,
+          firstName: payload.given_name || nameParts[0] || "User",
+          lastName: payload.family_name || nameParts[1] || "",
+          googleId: payload.sub,
+          profileImage: payload.picture || null,
+          provider: "google",
+        };
+
+        console.log("✅ Google token verified for:", userData.email);
+      } catch (error) {
+        console.error("❌ Google token verification failed:", error.message);
+        return res.status(401).json({
+          message: "Invalid Google token",
+          error: error.message,
+        });
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FACEBOOK VERIFICATION
+    // ═══════════════════════════════════════════════════════════════════════
+    else if (provider === "facebook") {
+      if (!accessToken) {
+        return res.status(400).json({
+          message: "No access token provided",
+        });
+      }
+
+      try {
+        const response = await axios.get(FACEBOOK_VERIFY_URL, {
+          params: {
+            access_token: accessToken,
+            fields: "id,name,email,picture.type(large)",
+          },
+        });
+
+        const facebookData = response.data;
+
+        if (!facebookData.id) {
+          throw new Error("No user ID in Facebook response");
+        }
+
+        const nameParts = (facebookData.name || "").split(" ");
+
+        userData = {
+          email:
+            facebookData.email ||
+            `fb_${facebookData.id}@facebook.local`,
+          firstName: nameParts[0] || "User",
+          lastName: nameParts[1] || "",
+          facebookId: facebookData.id,
+          profileImage: facebookData.picture?.data?.url || null,
+          provider: "facebook",
+        };
+
+        console.log(
+          "✅ Facebook token verified for:",
+          userData.email
+        );
+      } catch (error) {
+        console.error(
+          "❌ Facebook token verification failed:",
+          error.message
+        );
+        return res.status(401).json({
+          message: "Invalid Facebook token",
+          error: error.message,
+        });
+      }
+    } else {
+      return res.status(400).json({
+        message: `Unsupported provider: ${provider}`,
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FIND OR CREATE USER (Alumni)
+    // ═══════════════════════════════════════════════════════════════════════
+    let user = await Alumni.findOne({ email: userData.email });
+
+    if (!user) {
+      return res.status(403).json({
+        message:
+          "Complete alumni registration and membership payment before using social login.",
+      });
+    }
+
+    if (user.membershipPayment?.status !== "paid") {
+      return res.status(403).json({
+        message: "Membership payment must be verified before social login.",
+      });
+    }
+    if (!user.isApproved) {
+      return res.status(403).json({
+        message: "Your membership is awaiting administrator approval.",
+      });
+    }
+
+    // Link social account to an existing paid and approved member.
+    const socialIdField = userData.provider + "Id";
+    if (!user[socialIdField]) {
+      user[socialIdField] = userData[socialIdField];
+      if (userData.profileImage && !user.profileImage) {
+        user.profileImage = userData.profileImage;
+      }
+      await user.save();
+      console.log(
+        `✅ Linked ${userData.provider}Id to existing user:`,
+        user.email
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GENERATE JWT & SET COOKIE
+    // ═══════════════════════════════════════════════════════════════════════
+    const token = generateToken(user);
+
+    setAuthCookie(res, token);
+
+    console.log(
+      `✅ ${userData.provider} social login successful:`,
+      user.email
+    );
+
+    res.status(200).json({
+      message: `${provider} login successful`,
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: "alumni",
+        isApproved: user.isApproved ?? false,
+        profileImage: user.profileImage || null,
+      },
+    });
   } catch (error) {
+    console.error("❌ Social login error:", error);
     res.status(500).json({
-      message: "Failed to fetch profile",
+      message: "Social login failed",
+      error: error.message,
     });
   }
 };
 
-// @route   PUT /api/auth/change-password
-exports.changePassword = async (req, res) => {
+// ══════════════════════════════════════════════════════════════════════════
+// GET PROFILE
+// ══════════════════════════════════════════════════════════════════════════
+const getProfile = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
 
-    if (!currentPassword || !newPassword) {
-      return res
-        .status(400)
-        .json({ message: "Both current and new password required" });
+    // Check both User (admin) and Alumni tables
+    let user = await User.findById(userId).select("-password");
+    let isAdmin = !!user;
+
+    if (!user) {
+      user = await Alumni.findById(userId).select("-password");
+      if (!user) {
+        return res.status(404).json({
+          message: "User not found",
+        });
+      }
     }
 
-    if (newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "New password must be at least 6 characters" });
+    const token = req.cookies?.token;
+    if (token && req.user.exp) {
+      const remainingLifetime = req.user.exp * 1000 - Date.now();
+      if (remainingLifetime > 0) setAuthCookie(res, token, remainingLifetime);
     }
 
-    const alumni = await Alumni.findById(req.user.id).select("+password");
-    if (!alumni) {
-      return res.status(404).json({ message: "Alumni not found" });
-    }
-
-    const isMatch = await bcrypt.compare(currentPassword, alumni.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Current password is incorrect" });
-    }
-
-    alumni.password = await bcrypt.hash(newPassword, 10);
-    await alumni.save();
-
-    res.json({ message: "Password changed successfully" });
+    res.status(200).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: isAdmin ? user.role : "alumni",
+        isAdmin,
+        isApproved: user.isApproved ?? true,
+        profileImage: user.profileImage || null,
+      },
+    });
   } catch (error) {
-    console.error("Change Password Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Get profile error:", error);
+    res.status(500).json({
+      message: "Failed to fetch profile",
+      error: error.message,
+    });
   }
 };
 
-// @route   POST /api/auth/forgot-password
-// ✅ NEW: Generates a 6-digit OTP and stores it (logs to console — wire up nodemailer to email it)
-exports.forgotPassword = async (req, res) => {
+// ══════════════════════════════════════════════════════════════════════════
+// LOGOUT
+// ══════════════════════════════════════════════════════════════════════════
+const logout = async (req, res) => {
+  try {
+    res.clearCookie("token", { path: "/api/auth" });
+    res.clearCookie("token", { path: "/" });
+    res.status(200).json({
+      message: "Logout successful",
+    });
+  } catch (error) {
+    console.error("❌ Logout error:", error);
+    res.status(500).json({
+      message: "Logout failed",
+      error: error.message,
+    });
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// CHANGE PASSWORD
+// ══════════════════════════════════════════════════════════════════════════
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        message:
+          "Current password and new password are required",
+      });
+    }
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({
+        message: "New password must contain at least 8 characters",
+      });
+    }
+
+    // Check both tables
+    let user = await User.findById(userId).select("+password");
+    if (!user) {
+      user = await Alumni.findById(userId).select("+password");
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // Verify current password
+    if (!user.password) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
+      });
+    }
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Hash and update new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.status(200).json({
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("❌ Change password error:", error);
+    res.status(500).json({
+      message: "Password change failed",
+      error: error.message,
+    });
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// FORGOT PASSWORD
+// ══════════════════════════════════════════════════════════════════════════
+const RESET_OTP_LIFETIME_MS = 10 * 60 * 1000;
+const RESET_OTP_MAX_ATTEMPTS = 5;
+
+const hashResetOtp = (otp) =>
+  crypto.createHash("sha256").update(otp).digest();
+
+const isResetOtpValid = (user, otp) => {
+  if (
+    !user.resetOtp ||
+    !user.resetOtpExpiry ||
+    user.resetOtpExpiry.getTime() <= Date.now() ||
+    user.resetOtpAttempts >= RESET_OTP_MAX_ATTEMPTS
+  ) {
+    return false;
+  }
+  const expected = Buffer.from(user.resetOtp, "hex");
+  const actual = hashResetOtp(otp);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+};
+
+const clearResetOtp = (user) => {
+  user.resetOtp = undefined;
+  user.resetOtpExpiry = undefined;
+  user.resetOtpAttempts = 0;
+};
+
+const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+    if (typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({
+        message: "Email is required",
+      });
     }
 
-    const alumni = await Alumni.findOne({ email: email.toLowerCase() });
-    if (!alumni) {
-      // Don't reveal whether email exists — generic message
-      return res
-        .status(404)
-        .json({ message: "No account found with this email address" });
+    const normalizedEmail = email.trim().toLowerCase();
+    const resetFields =
+      "+resetOtp +resetOtpExpiry +resetOtpAttempts +resetOtpSentAt";
+    let user = await User.findOne({ email: normalizedEmail }).select(resetFields);
+    if (!user) {
+      user = await Alumni.findOne({ email: normalizedEmail }).select(resetFields);
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+    if (user) {
+      if (
+        user.resetOtpSentAt &&
+        Date.now() - user.resetOtpSentAt.getTime() < 60 * 1000
+      ) {
+        return res.status(200).json({
+          message: "If an account exists for that email, a password reset code has been sent.",
+        });
+      }
+      const otp = String(crypto.randomInt(100000, 1000000));
+      user.resetOtp = hashResetOtp(otp).toString("hex");
+      user.resetOtpExpiry = new Date(Date.now() + RESET_OTP_LIFETIME_MS);
+      user.resetOtpAttempts = 0;
+      user.resetOtpSentAt = new Date();
+      await user.save();
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: normalizedEmail,
+          subject: "PSG CAS Alumni Portal password reset code",
+          text: `Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
+        });
+      } catch (emailError) {
+        clearResetOtp(user);
+        await user.save();
+        throw emailError;
+      }
+    }
 
-    otpStore.set(email.toLowerCase(), { otp, expiresAt });
-
-    //console.log(`\n📧 OTP for ${email}: ${otp} (expires in 10 minutes)\n`);
-
-    await transporter.sendMail({
-      from: `"PSG ARTS Alumni Association"<${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Password Set OTP",
-      html: `
-        <h2>Password Set Request</h2>
-        <p>Your OTP is:</p>
-        <h1>${otp}</h1>
-        <p>This OTP is valid for 5 minutes.</p>
-      `,
+    res.status(200).json({
+      message: "If an account exists for that email, a password reset code has been sent.",
     });
-
-    res.json({ message: `OTP sent to ${email}. Check your inbox.` });
   } catch (error) {
-    console.error("Forgot Password Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Forgot password error:", error);
+    res.status(500).json({
+      message: "Forgot password failed",
+      error: error.message,
+    });
   }
 };
 
-// @route   POST /api/auth/verify-otp
-exports.verifyOtp = async (req, res) => {
+// ══════════════════════════════════════════════════════════════════════════
+// VERIFY OTP
+// ══════════════════════════════════════════════════════════════════════════
+const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    if (!email || !otp) {
-      return res.status(400).json({ message: "Email and OTP are required" });
+    if (typeof email !== "string" || !email.trim() || typeof otp !== "string" || !otp.trim()) {
+      return res.status(400).json({
+        message: "Email and OTP are required",
+      });
     }
 
-    const stored = otpStore.get(email.toLowerCase());
-
-    if (!stored) {
-      return res
-        .status(400)
-        .json({ message: "OTP not found. Please request a new one." });
+    // Check both tables
+    const normalizedEmail = email.trim().toLowerCase();
+    const resetFields =
+      "+resetOtp +resetOtpExpiry +resetOtpAttempts";
+    let user = await User.findOne({ email: normalizedEmail }).select(resetFields);
+    if (!user) {
+      user = await Alumni.findOne({ email: normalizedEmail }).select(resetFields);
     }
 
-    if (Date.now() > stored.expiresAt) {
-      otpStore.delete(email.toLowerCase());
-      return res
-        .status(400)
-        .json({ message: "OTP has expired. Please request a new one." });
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
+      });
     }
 
-    if (stored.otp !== otp.toString()) {
-      return res
-        .status(400)
-        .json({ message: "Invalid OTP. Please try again." });
+    if (!isResetOtpValid(user, String(otp))) {
+      if (user.resetOtp && user.resetOtpExpiry?.getTime() > Date.now()) {
+        user.resetOtpAttempts += 1;
+        if (user.resetOtpAttempts >= RESET_OTP_MAX_ATTEMPTS) clearResetOtp(user);
+        await user.save();
+      }
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
+      });
     }
 
-    res.json({ message: "OTP verified successfully" });
+    res.status(200).json({
+      message: "OTP verified successfully",
+    });
   } catch (error) {
-    console.error("Verify OTP Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Verify OTP error:", error);
+    res.status(500).json({
+      message: "OTP verification failed",
+      error: error.message,
+    });
   }
 };
 
-// @route   POST /api/auth/reset-password
-exports.resetPassword = async (req, res) => {
+// ══════════════════════════════════════════════════════════════════════════
+// RESET PASSWORD
+// ══════════════════════════════════════════════════════════════════════════
+const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
-    if (!email || !otp || !newPassword) {
-      return res
-        .status(400)
-        .json({ message: "Email, OTP, and new password are required" });
+    if (
+      typeof email !== "string" ||
+      !email.trim() ||
+      typeof otp !== "string" ||
+      !otp.trim() ||
+      typeof newPassword !== "string" ||
+      !newPassword
+    ) {
+      return res.status(400).json({
+        message:
+          "Email, OTP, and new password are required",
+      });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        message: "New password must contain at least 8 characters",
+      });
     }
 
-    if (newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+    // Check both tables
+    const normalizedEmail = email.trim().toLowerCase();
+    const resetFields = "+resetOtp +resetOtpExpiry +resetOtpAttempts +password";
+    let user = await User.findOne({ email: normalizedEmail }).select(resetFields);
+    if (!user) {
+      user = await Alumni.findOne({ email: normalizedEmail }).select(resetFields);
     }
 
-    // Verify OTP again before resetting
-    const stored = otpStore.get(email.toLowerCase());
-
-    if (!stored) {
-      return res
-        .status(400)
-        .json({ message: "OTP not found. Please request a new one." });
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
+      });
     }
 
-    if (Date.now() > stored.expiresAt) {
-      otpStore.delete(email.toLowerCase());
-      return res
-        .status(400)
-        .json({ message: "OTP has expired. Please request a new one." });
+    if (!isResetOtpValid(user, String(otp))) {
+      if (user.resetOtp && user.resetOtpExpiry?.getTime() > Date.now()) {
+        user.resetOtpAttempts += 1;
+        if (user.resetOtpAttempts >= RESET_OTP_MAX_ATTEMPTS) clearResetOtp(user);
+        await user.save();
+      }
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
+      });
     }
 
-    if (stored.otp !== otp.toString()) {
-      return res.status(400).json({ message: "Invalid OTP." });
-    }
+    // Hash and update password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    clearResetOtp(user);
+    await user.save();
 
-    // Find alumni and update password
-    const alumni = await Alumni.findOne({ email: email.toLowerCase() });
-    if (!alumni) {
-      return res.status(404).json({ message: "Account not found" });
-    }
+    console.log(`✅ Password reset successful for:`, user.email);
 
-    alumni.password = await bcrypt.hash(newPassword, 10);
-    await alumni.save();
-
-    // Clear OTP after successful reset
-    otpStore.delete(email.toLowerCase());
-
-    res.json({ message: "Password reset successfully. You can now log in." });
+    res.status(200).json({
+      message: "Password reset successfully",
+    });
   } catch (error) {
-    console.error("Reset Password Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Reset password error:", error);
+    res.status(500).json({
+      message: "Password reset failed",
+      error: error.message,
+    });
   }
 };
 
-// @route   POST /api/auth/logout
-exports.logout = (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-  });
-  res.json({ message: "Logged out successfully" });
+module.exports = {
+  register,
+  login,
+  logout,
+  getProfile,
+  changePassword,
+  forgotPassword,
+  verifyOtp,
+  resetPassword,
+  socialLogin,  // ✅ NEW
 };

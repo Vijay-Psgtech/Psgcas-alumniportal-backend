@@ -20,8 +20,12 @@ const UserSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: true,
+      default: null,  // ✅ Can be null for social logins
     },
+    resetOtp: { type: String, select: false },
+    resetOtpExpiry: { type: Date, select: false },
+    resetOtpAttempts: { type: Number, default: 0, select: false },
+    resetOtpSentAt: { type: Date, select: false },
 
     role: {
       type: String,
@@ -36,6 +40,24 @@ const UserSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+
+    // ✅ NEW: OAuth Fields
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,  // Unique only when an OAuth ID is present
+    },
+
+    facebookId: {
+      type: String,
+      unique: true,
+      sparse: true,  // Unique only when an OAuth ID is present
+    },
+
+    profileImage: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true },

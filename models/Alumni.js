@@ -33,6 +33,10 @@ const AlumniSchema = new mongoose.Schema(
       minlength: 6,
       select: false, // Don't return password by default
     },
+    resetOtp: { type: String, select: false },
+    resetOtpExpiry: { type: Date, select: false },
+    resetOtpAttempts: { type: Number, default: 0, select: false },
+    resetOtpSentAt: { type: Date, select: false },
     phone: {
       type: String,
       trim: true,
@@ -59,6 +63,10 @@ const AlumniSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    fundingType: {
+      type: String,
+      trim: true,
+    },
     degree: {
       type: String,
       trim: true,
@@ -73,6 +81,22 @@ const AlumniSchema = new mongoose.Schema(
     studyEndYear: {
       type: String,
     },
+    batchDetails: {
+      type: String,
+      trim: true,
+    },
+    departmentDetails: {
+      type: String,
+      trim: true,
+    },
+    educationHistory: [
+      {
+        department: { type: String, trim: true, default: "" },
+        degree: { type: String, trim: true, default: "" },
+        studyStartYear: { type: String, trim: true, default: "" },
+        studyEndYear: { type: String, trim: true, default: "" },
+      },
+    ],
 
     // Employment
     currentCompany: {
@@ -121,9 +145,18 @@ const AlumniSchema = new mongoose.Schema(
       type: String,
     },
 
+    postalAddress: {
+      line1: String,
+      line2: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: String,
+    },
+
     location: {
       type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], required: true }, // [lng, lat]
+      coordinates: { type: [Number], default: [] }, // [lng, lat]
     },
 
     // Files Upload
@@ -153,6 +186,24 @@ const AlumniSchema = new mongoose.Schema(
     isApproved: {
       type: Boolean,
       default: false, // New registrations pending approval
+    },
+    membershipPayment: {
+      status: {
+        type: String,
+        enum: ["paid"],
+      },
+      amount: Number,
+      currency: { type: String, default: "INR" },
+      provider: String,
+      transactionId: { type: String, sparse: true, unique: true },
+      receiptNumber: { type: String, sparse: true, unique: true },
+      transactionDate: Date,
+      receiptEmailStatus: {
+        type: String,
+        enum: ["pending", "sent", "failed", "imported"],
+        default: "pending",
+      },
+      receiptEmailError: String,
     },
     isAdmin: {
       type: Boolean,

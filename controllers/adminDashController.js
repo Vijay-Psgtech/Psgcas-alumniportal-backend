@@ -17,10 +17,17 @@ exports.getAllAlumniForAdmin = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    let filter = { role: "Alumni" };
+    let filter = { role: "Alumni", "membershipPayment.status": "paid" };
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
-    if (department) filter.department = department;
+    if (req.adminDepartment) {
+      if (department && department !== req.adminDepartment) {
+        return res.status(403).json({ message: "Department access denied" });
+      }
+      filter.department = req.adminDepartment;
+    } else if (department) {
+      filter.department = department;
+    }
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
     if (search) {
       filter.$or = [
@@ -76,6 +83,10 @@ exports.getAllAlumniForAdmin = async (req, res) => {
 // GET /api/admin/dashboard/stats
 exports.getDashboardStats = async (req, res) => {
   try {
+    const paidMembershipFilter = {
+      role: "Alumni",
+      "membershipPayment.status": "paid",
+    };
     const [
       totalAlumni,
       approvedAlumni,
@@ -87,9 +98,9 @@ exports.getDashboardStats = async (req, res) => {
       totalMembershipFees,
       completedMembership,
     ] = await Promise.all([
-      Alumni.countDocuments({ role: "Alumni" }),
-      Alumni.countDocuments({ isApproved: true, role: "Alumni" }),
-      Alumni.countDocuments({ isApproved: false, role: "Alumni" }),
+      Alumni.countDocuments(paidMembershipFilter),
+      Alumni.countDocuments({ ...paidMembershipFilter, isApproved: true }),
+      Alumni.countDocuments({ ...paidMembershipFilter, isApproved: false }),
       Donation.find({ status: "completed" }),
       Donation.countDocuments({ status: "pending" }),
       Event.countDocuments(),

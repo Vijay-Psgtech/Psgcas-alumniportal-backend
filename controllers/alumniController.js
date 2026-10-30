@@ -1,5 +1,10 @@
 // backend/controllers/alumniController.js
 const Alumni = require("../models/Alumni");
+const paidApprovedFilter = {
+  role: "Alumni",
+  isApproved: true,
+  "membershipPayment.status": "paid",
+};
 
 // @route   GET /api/alumni
 // @desc    Get all approved alumni
@@ -7,9 +12,8 @@ const Alumni = require("../models/Alumni");
 exports.getAllAlumni = async (req, res) => {
   try {
     const { department, batchYear, country, city, search } = req.query;
-    const totalCount = await Alumni.countDocuments();
     // Build filter
-    let filter = { role: "Alumni" };
+    const filter = { ...paidApprovedFilter };
 
     if (department) filter.department = department;
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
@@ -25,7 +29,10 @@ exports.getAllAlumni = async (req, res) => {
       ];
     }
 
-    const alumni = await Alumni.find(filter).select("-password");
+    const alumni = await Alumni.find(filter).select(
+      "-password -postalAddress -fullAddress -officeAddress -membershipPayment",
+    );
+    const totalCount = await Alumni.countDocuments(filter);
 
     res.json({
       message: "Alumni retrieved successfully",
@@ -43,7 +50,10 @@ exports.getAllAlumni = async (req, res) => {
 // @access  Public
 exports.getAlumniById = async (req, res) => {
   try {
-    const alumni = await Alumni.findById(req.params.id).select("-password");
+    const alumni = await Alumni.findOne({
+      _id: req.params.id,
+      ...paidApprovedFilter,
+    }).select("-password -postalAddress -fullAddress -officeAddress -membershipPayment");
 
     if (!alumni || !alumni.isApproved) {
       return res.status(404).json({ message: "Alumni not found" });
@@ -255,14 +265,15 @@ exports.updateAlumniProfile = async (req, res) => {
 
 // @route   GET /api/alumni/map/data
 // @desc    Get alumni data for map visualization
-// @access  Public
+// @access  Authenticated members
 exports.getMapData = async (req, res) => {
   try {
     const { department } = req.query;
-    let filter = { role: "Alumni" };
+    const filter = { ...paidApprovedFilter };
 
     if (department) filter.department = department;
 
+<<<<<<< ours
     const alumni = await Alumni.aggregate([
       { $match: {
         ...filter,
@@ -290,6 +301,15 @@ exports.getMapData = async (req, res) => {
         },
       },
     ]);
+=======
+    const alumni = await Alumni.find({
+      ...filter,
+      country: { $exists: true, $ne: "" },
+      city: { $exists: true, $ne: "" },
+    })
+      .select("-password -postalAddress -fullAddress -officeAddress -membershipPayment")
+      .lean();
+>>>>>>> theirs
 
     // Group by country
     const groupedByCountry = {};
@@ -341,14 +361,14 @@ exports.getAlumniBatchWise = async (req, res) => {
     const {
       batchYear,
       department,
-      jobTitle,
+      occupation,
       search,
       page = 1,
       limit = 12,
       sort = "desc",
     } = req.query;
 
-    let query = { role: "Alumni" };
+    const query = { ...paidApprovedFilter };
 
     // Batch filter
     if (batchYear) {
@@ -360,9 +380,9 @@ exports.getAlumniBatchWise = async (req, res) => {
       query.department = department;
     }
 
-    // Job title filter
-    if (jobTitle) {
-      query.jobTitle = jobTitle;
+    // Occupation filter
+    if (occupation) {
+      query.occupation = occupation;
     }
 
     // Search filter
@@ -371,12 +391,13 @@ exports.getAlumniBatchWise = async (req, res) => {
         { firstName: { $regex: search, $options: "i" } },
         { lastName: { $regex: search, $options: "i" } },
         { currentCompany: { $regex: search, $options: "i" } },
-        { rollNumber: { $regex: search, $options: "i" } },
+        { jobTitle: { $regex: search, $options: "i" } },
       ];
     }
 
     const skip = (page - 1) * limit;
 
+<<<<<<< ours
     // fetch only required fields for listing to optimize performance
     const alumni = await Alumni.aggregate([
       { $match: query },
@@ -400,6 +421,13 @@ exports.getAlumniBatchWise = async (req, res) => {
       { $skip: skip },
       { $limit: Number(limit) },
     ]);
+=======
+    const alumni = await Alumni.find(query)
+      .sort({ batchYear: sort === "asc" ? 1 : -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .select("-password -postalAddress -fullAddress -officeAddress -membershipPayment");
+>>>>>>> theirs
 
     const total = await Alumni.countDocuments(query);
 
@@ -434,6 +462,25 @@ exports.getAlumniBatchWise = async (req, res) => {
 exports.getAlumniGroupedByBatch = async (req, res) => {
   try {
     const alumni = await Alumni.aggregate([
+      { $match: paidApprovedFilter },
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          phone: 1,
+          department: 1,
+          degree: 1,
+          batchYear: 1,
+          studyStartYear: 1,
+          studyEndYear: 1,
+          jobTitle: 1,
+          currentCompany: 1,
+          city: 1,
+          country: 1,
+          profileImage: 1,
+        },
+      },
       {
         $group: {
           _id: "$batchYear",
@@ -461,9 +508,7 @@ exports.batches = async (req, res) => {
   try {
     const { department } = req.query;
 
-    let filter = {
-      role: "Alumni",
-    };
+    const filter = { ...paidApprovedFilter };
 
     if (department) {
       filter.department = department;
@@ -534,10 +579,10 @@ exports.batches = async (req, res) => {
 exports.getAlumniStats = async (req, res) => {
   try {
     const { department } = req.query;
-    let filter = { role: "Alumni" };
+    const filter = { ...paidApprovedFilter };
     if (department) filter.department = department;
     const totalAlumni = await Alumni.countDocuments({
-      ...filter,
+            ...filter,
     });
     const batchStats = await Alumni.aggregate([
       { $match: { ...filter } },
@@ -604,6 +649,7 @@ exports.getAlumniStats = async (req, res) => {
 
 exports.getAlumniFilters  = async (req, res) => {
   try {
+<<<<<<< ours
     const [departments, batches] = await Promise.all([
       Alumni.distinct("department"),
       Alumni.distinct("batchYear"),
@@ -614,9 +660,20 @@ exports.getAlumniFilters  = async (req, res) => {
       batches: batches
         .filter(Boolean)
         .sort((a, b) => String(b).localeCompare(String(a))),
+=======
+    const departments = await Alumni.distinct("department", paidApprovedFilter).sort();
+    const batches = await Alumni.distinct("batchYear", paidApprovedFilter).sort();
+
+    res.json({
+      success: true,
+      data: {
+        departments,
+        batches
+      }
+>>>>>>> theirs
     });
   } catch (err) {
     console.error("Get Disinct Deaprtment & batch Error:", err);
-    res.status(500).json({ message: "Server error", err: err.message });
+    res.status(500).json({message: "Server error", err: err.message });
   }
-};
+}
