@@ -9,6 +9,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
   try {
     const {
       status,
+      membershipStatus,
       search,
       department,
       batchYear,
@@ -20,6 +21,7 @@ exports.getAllAlumniForAdmin = async (req, res) => {
     let filter = { role: "Alumni" };
     if (status === "pending") filter.isApproved = false;
     else if (status === "approved") filter.isApproved = true;
+    if (membershipStatus) filter.membershipStatus = membershipStatus;
     if (department) filter.department = department;
     if (batchYear) filter.batchYear = batchYear === "null" ? null : batchYear;
     if (search) {
@@ -206,8 +208,14 @@ exports.getAllMemberships = async (req, res) => {
 
     // populate payment mode details from payment collection
     const memberships = await Membership.find(filter)
-      .populate("paymentId", "gatewayResponse.mode")
-      .populate("alumniId", "rollNumber jobTitle studyStartYear studyEndYear")
+      .populate(
+        "paymentId",
+        "txnid easebuzzTxnId bankRefNum completedAt gatewayResponse.mode",
+      )
+      .populate(
+        "alumniId",
+        "firstName lastName email phone occupation department degree studyStartYear studyEndYear currentCompany jobTitle officeAddress city country fullAddress",
+      )
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
