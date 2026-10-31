@@ -97,6 +97,9 @@ app.use("/api/campaigns", require("./routes/campaigns"));
 // Banners
 app.use("/api/banners", require("./routes/bannerRoutes"));
 
+// Editable public-page content (super-admin managed)
+app.use("/api/site-content", require("./routes/siteContent"));
+
 // Notification scrolls (separate from /api/notifications)
 app.use("/api/notification-scrolls", require("./routes/scrollRoutes"));
 
