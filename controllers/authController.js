@@ -245,7 +245,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, alumni.password);
+    const isPasswordValid =
+      alumni.password && (await bcrypt.compare(password, alumni.password));
 
     if (!isPasswordValid) {
       return res.status(401).json({

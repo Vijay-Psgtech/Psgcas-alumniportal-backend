@@ -7,12 +7,14 @@ const {
   getAllDonations,
   getAllMemberships,
 } = require("../controllers/adminDashController");
+const { importAlumni } = require("../controllers/alumniImportController");
 
 // All routes protected with adminAuth middleware
 router.use(adminAuth); // Protect all routes below
 
 // Get all alumni
 router.get("/alumni/all", getAllAlumniForAdmin);
+router.post("/alumni/import", importAlumni);
 
 // ============ DONATION MANAGEMENT ROUTES ============
 // Get all donations
