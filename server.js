@@ -42,7 +42,14 @@ app.use(
 );
 
 
-app.use(express.json());
+const defaultJsonParser = express.json();
+const alumniImportJsonParser = express.json({ limit: "5mb" });
+app.use((req, res, next) => {
+  if (req.path === "/api/admin/dashboard/alumni/import") {
+    return alumniImportJsonParser(req, res, next);
+  }
+  return defaultJsonParser(req, res, next);
+});
 app.use(cookieParser());
 app.use("/uploads", express.static("uploads"));
 
