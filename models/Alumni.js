@@ -29,7 +29,6 @@ const AlumniSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
       minlength: 6,
       select: false, // Don't return password by default
     },
